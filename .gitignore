@@ -12,11 +12,16 @@ node_modules/
 *.genie
 
 # 忽略：服务端版本的数据库、备份与旧版本文档（本仓库只放 H5 + 小程序共用逻辑）
-data/
-data-before-*/
-public/
-server.js
-server-*-backup.js
-README_*.txt
-README-V*.txt
-*.sqlite
+#
+# 注意：这些规则必须带前导 / 锚定到仓库根目录。
+# 早先写成 data/ 时，git 会匹配任意层级的 data 目录，把 miniprogram/data/
+# （catalog 278 项物资、seed 种子数据、subcats、budget）一起忽略了 —— 结果仓库里
+# 缺了业务数据源，biz.js 无法重建，CI 校验必然失败。
+/data/
+/data-before-*/
+/public/
+/server.js
+/server-*-backup.js
+/README_*.txt
+/README-V*.txt
+/*.sqlite
