@@ -1,0 +1,23 @@
+{
+  "description": "安居乐寓物资采购管理系统 · V1.24 小程序演示版",
+  "packOptions": {
+    "ignore": [
+      {
+        "type": "folder",
+        "value": ".workbuddy"
+      }
+    ],
+    "include": []
+  },
+  "setting": {
+    "bundle": false,
+    "es6": true,
+    "minified": true,
+    "postcss": true,
+    "urlCheck": false
+  },
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "anju-purchase-miniprogram",
+  "miniprogramRoot": "./"
+}

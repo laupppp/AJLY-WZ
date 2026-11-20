@@ -1,0 +1,116 @@
+<view class="page">
+  <view class="head">
+    <view class="head-title">待办审批</view>
+    <view class="head-sub">{{me.name}} · {{items.length}} 项待处理</view>
+    <view class="head-budget" wx:if="{{budgetText}}">{{budgetText}}</view>
+  </view>
+
+  <block wx:if="{{allowed}}">
+    <view class="ap-card accent accent-{{item.isBatch ? 'dark' : (item.slaLevel === 'overdue' ? 'bad' : 'warn')}}" wx:for="{{items}}" wx:key="key">
+      <view class="between">
+        <view class="ap-title">{{item.title}}</view>
+        <view class="pill {{item.isBatch ? 'dark' : 'warn'}}">{{item.stageText}}</view>
+      </view>
+      <view class="ap-sub">{{item.sub}}</view>
+      <view class="ap-budget {{item.budgetShort ? 'bad' : (item.reviewHint ? 'info' : '')}}" wx:if="{{item.budgetHint || item.reviewHint}}">{{item.budgetHint || item.reviewHint}}</view>
+      <view class="between ap-foot">
+        <view class="ap-sla {{item.slaLevel}}" wx:if="{{item.slaText}}">⏱ {{item.slaText}}</view>
+        <view class="ap-sla" wx:else>在时效内</view>
+        <view class="money">¥{{item.amountText}}</view>
+      </view>
+      <view class="ap-actions">
+        <view class="btn sm danger" data-key="{{item.key}}" data-batch="{{item.isBatch ? '1' : '0'}}" data-pass="0" bindtap="decide">驳回</view>
+        <view class="btn sm" data-key="{{item.key}}" data-batch="{{item.isBatch ? '1' : '0'}}" data-pass="1" bindtap="decide">通过</view>
+        <view class="btn sm ghost" wx:if="{{!item.isBatch}}" data-id="{{item.id}}" bindtap="gotoDetail">详情</view>
+      </view>
+    </view>
+
+    <view class="empty" wx:if="{{!items.length}}">
+      <view class="empty-icon">✅</view>
+      <view class="empty-text">暂无待审批事项</view>
+      <view class="tiny muted" style="margin-top:10rpx">新提交的订单会按金额与预算自动进入对应审批节点</view>
+    </view>
+
+    <view class="card" wx:if="{{logs.length}}">
+      <view class="card-head">
+        <view class="card-title">最近审批留痕</view>
+        <view class="card-sub">模拟操作记录</view>
+      </view>
+      <view class="log" wx:for="{{logs}}" wx:key="key">
+        <view class="log-title">{{item.title}}</view>
+        <view class="log-sub">{{item.sub}}</view>
+      </view>
+    </view>
+  </block>
+
+  <view class="empty" wx:else>
+    <view class="empty-icon">🔐</view>
+    <view class="empty-text">当前身份（{{me.name}}）无审批权限</view>
+    <view class="tiny muted" style="margin:12rpx 0 24rpx">请切换为战区负责人或运营管理部体验审批</view>
+    <view class="btn ghost sm" style="width:280rpx" bindtap="goIdentity">切换身份</view>
+  </view>
+
+  <!-- 预算核定缺口弹层：把"机动预算不足"变成三条可执行路径 -->
+  <view class="gap-mask" wx:if="{{gap}}" bindtap="closeGap"></view>
+  <view class="gap-sheet" wx:if="{{gap}}">
+    <view class="gap-head">
+      <view class="gap-title">机动预算不足，核定被卡住</view>
+      <view class="gap-sub">{{gap.orderId}} · {{gap.store}}</view>
+    </view>
+
+    <view class="gap-rows">
+      <view class="gap-row"><text class="gap-k">订单金额</text><text class="gap-v strong">¥{{gap.totalText}}</text></view>
+      <view class="gap-row"><text class="gap-k">涉及科目可用额度</text><text class="gap-v">¥{{gap.usableText}}</text></view>
+      <view class="gap-row"><text class="gap-k">需从机动池追加</text><text class="gap-v">¥{{gap.neededText}}</text></view>
+      <view class="gap-row"><text class="gap-k">机动池余额</text><text class="gap-v">¥{{gap.flexText}}</text></view>
+      <view class="gap-row gap-row-bad">
+        <text class="gap-k">仍缺</text><text class="gap-v">¥{{gap.shortText}}</text>
+      </view>
+    </view>
+
+    <view class="gap-items" wx:if="{{gap.items.length}}">
+      <view class="gap-items-title">按费用科目拆分</view>
+      <view class="gap-item" wx:for="{{gap.items}}" wx:key="key">
+        <view class="between">
+          <text class="gap-item-name">{{item.name}}</text>
+          <text class="gap-item-amt">¥{{item.totalText}}</text>
+        </view>
+        <view class="tiny muted mt8">该科目可用 ¥{{item.usableText}} · 需追加 ¥{{item.neededText}}</view>
+      </view>
+    </view>
+
+    <view class="gap-tip">这笔单「门店额度 + 机动池」最多可核定 ¥{{gap.maxText}}。下面任一方式补足后会自动完成核定。</view>
+
+    <view class="gap-block">
+      <view class="gap-block-title">方式一 · 追加机动预算</view>
+      <view class="gap-input-row">
+        <text class="gap-cur">¥</text>
+        <input class="gap-input" type="digit" value="{{gapAmount}}" bindinput="onGapAmount" placeholder="追加金额" />
+        <input class="gap-input gap-input-reason" value="{{gapReason}}" bindinput="onGapReason" placeholder="用途，如：门店活动专项" maxlength="40" />
+      </view>
+      <view class="btn block" bindtap="submitFlex">追加 ¥{{gapAmount}} 并核定</view>
+    </view>
+
+    <view class="gap-block" wx:if="{{gapCandidates.length}}">
+      <view class="gap-block-title">方式二 · 从其他门店调剂同科目闲置额度（不动机动池）</view>
+      <view class="gap-picks" wx:if="{{gap.mix}}">
+        <view class="gap-pick {{gap.key === item.key ? 'on' : ''}}" wx:for="{{gap.items}}" wx:key="key"
+              data-key="{{item.key}}" bindtap="pickGapItem">{{item.name}} · 缺 ¥{{item.neededText}}</view>
+      </view>
+      <view class="gap-store" wx:for="{{gapCandidates}}" wx:key="store" data-store="{{item.store}}" bindtap="applyTransfer">
+        <view class="flex1">
+          <view class="gap-store-name">{{item.store}}</view>
+          <view class="gap-store-sub">{{gap.keyName}} 可调结余 ¥{{item.freeText}}</view>
+        </view>
+        <view class="gap-store-go">调入 ›</view>
+      </view>
+    </view>
+
+    <view class="gap-foot">
+      <view class="btn ghost sm" bindtap="closeGap">先不处理</view>
+      <view class="btn danger sm" bindtap="rejectFromGap">驳回并要求门店拆单</view>
+    </view>
+  </view>
+
+  <tabbar active="approve" />
+</view>

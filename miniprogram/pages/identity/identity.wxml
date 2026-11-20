@@ -1,0 +1,115 @@
+<view class="page" wx:if="{{mode === 'profile'}}">
+  <view class="me-head">
+    <view class="me-avatar">{{avatarText}}</view>
+    <view class="flex1">
+      <view class="me-name">{{me.name}}</view>
+      <view class="me-role">{{roleText}}</view>
+      <view class="me-scope">{{scopeText}}</view>
+    </view>
+  </view>
+
+  <view class="stat-strip">
+    <view class="stat" wx:for="{{stats}}" wx:key="label">
+      <view class="stat-num">{{item.num}}</view>
+      <view class="stat-label">{{item.label}}</view>
+    </view>
+  </view>
+
+  <view class="block">
+    <view class="block-head">
+      <text class="block-title">权限范围</text>
+      <text class="block-note">{{duty}}</text>
+    </view>
+    <view class="chips-wrap">
+      <view class="tag" wx:for="{{brief}}" wx:key="*this">{{item}}</view>
+    </view>
+  </view>
+
+  <view class="block flush">
+    <view class="list-row" wx:for="{{entries}}" wx:key="key" data-url="{{item.url}}" bindtap="go">
+      <view class="row-icon">{{item.icon}}</view>
+      <view class="flex1">
+        <view class="row-title">{{item.label}}</view>
+        <view class="row-sub">{{item.sub}}</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+  </view>
+
+  <view class="block flush">
+    <view class="list-row">
+      <view class="row-icon plain">📤</view>
+      <view class="flex1">
+        <view class="row-title">转发给同事体验</view>
+        <view class="row-sub">对方点击卡片即可打开，无需扫码</view>
+      </view>
+      <button class="share-btn" open-type="share">转发</button>
+    </view>
+    <view class="list-row">
+      <view class="row-icon plain">🎛</view>
+      <view class="flex1">
+        <view class="row-title">演示模式</view>
+        <view class="row-sub">{{demoMode ? '显示身份切换与数据重置入口' : '已隐藏演示入口，界面接近正式版'}}</view>
+      </view>
+      <switch checked="{{demoMode}}" color="#2966a5" bindchange="toggleDemo" />
+    </view>
+    <view class="list-row" wx:if="{{demoMode}}" bindtap="openSwitch">
+      <view class="row-icon plain">🔄</view>
+      <view class="flex1">
+        <view class="row-title">切换体验身份</view>
+        <view class="row-sub">演示用：体验门店、部门、中台与供应商</view>
+      </view>
+      <view class="demo-chip">演示</view>
+    </view>
+    <view class="list-row" wx:if="{{demoMode}}" bindtap="resetDemo">
+      <view class="row-icon plain">♻️</view>
+      <view class="flex1">
+        <view class="row-title">重置演示数据</view>
+        <view class="row-sub">恢复到 V1.24 初始的 12 笔订单</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="list-row" bindtap="showAbout">
+      <view class="row-icon plain">ℹ️</view>
+      <view class="flex1">
+        <view class="row-title">关于演示版</view>
+        <view class="row-sub">{{version}}</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+  </view>
+
+  <view class="foot-note" wx:if="{{demoMode}}">演示系统，数据均为虚构，不作为真实采购依据。</view>
+
+  <tabbar active="me" />
+</view>
+
+<view class="page" wx:else>
+  <view class="switch-head">
+    <view class="back" bindtap="closeSwitch">‹</view>
+    <view class="switch-title">切换体验身份</view>
+    <view class="back ghost"></view>
+  </view>
+  <view class="switch-tip">仅演示使用。切换后首页入口、底部导航与可见数据都会按该角色权限重新组织。职能部门只保留 1 个通用身份，正式版接入企业微信后由通讯录自动识别部门。</view>
+
+  <view class="group" wx:for="{{groups}}" wx:key="title" wx:for-item="group">
+    <view class="group-head">
+      <text class="group-title">{{group.title}}</text>
+      <text class="group-desc">{{group.desc}}</text>
+    </view>
+    <view class="picker-item {{item.active ? 'on' : ''}}"
+          wx:for="{{group.items}}"
+          wx:key="id"
+          data-id="{{item.id}}"
+          bindtap="switchTo">
+      <view class="flex1">
+        <view class="pi-name">{{item.name}}</view>
+        <view class="pi-duty">{{item.duty}}</view>
+      </view>
+      <view class="pi-check" wx:if="{{item.active}}">当前</view>
+      <view class="pi-arrow" wx:else>›</view>
+    </view>
+  </view>
+
+  <view class="foot-note">切换后自动回到首页，所有数据仍保存在本机。</view>
+</view>

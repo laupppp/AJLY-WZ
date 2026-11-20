@@ -1,0 +1,104 @@
+<view class="page" wx:if="{{order}}">
+  <view class="head">
+    <view class="head-title">登记发货 · 第 {{batchNo}} 批</view>
+    <view class="head-sub">{{order.id}} · {{order.store}}</view>
+    <view class="head-meta">收货地址：{{order.address}}</view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">本次交付商品</view>
+      <view class="card-sub" bindtap="fillAll">全部剩余 ↗</view>
+    </view>
+    <view class="line-item" wx:for="{{items}}" wx:key="id">
+      <view class="between">
+        <view class="flex1">
+          <view class="line-name">{{item.name}}</view>
+          <view class="line-sub">订单 {{item.qty}} · 已交 {{item.delivered}} · 剩余 {{item.remaining}}</view>
+        </view>
+        <view class="stepper">
+          <view class="btn-step" data-id="{{item.id}}" data-delta="-1" bindtap="changeQty">−</view>
+          <view class="num">{{item.thisQty}}</view>
+          <view class="btn-step add" data-id="{{item.id}}" data-delta="1" bindtap="changeQty">＋</view>
+        </view>
+      </view>
+    </view>
+    <view class="tiny muted mt16">本批合计 {{totalQty}} 件。支持分批发货，未发数量可下次继续登记。</view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">配送方式</view>
+      <view class="card-sub">已选 {{methodLabel}}</view>
+    </view>
+
+    <view class="methods">
+      <view class="method {{method === item.key ? 'on' : ''}}"
+            wx:for="{{methods}}" wx:key="key"
+            data-key="{{item.key}}" bindtap="pickMethod">
+        <view class="method-main">
+          <view class="method-label">{{item.label}}</view>
+          <view class="method-desc">{{item.desc}}</view>
+        </view>
+        <view class="method-radio">{{method === item.key ? '✓' : ''}}</view>
+      </view>
+    </view>
+
+    <view class="form">
+      <view class="field" wx:if="{{method === 'express'}}">
+        <view class="field-label">快递公司<text class="req">*</text></view>
+        <input class="input" type="text" model:value="{{carrier}}" data-key="carrier"
+               bindinput="onField" bindfocus="onFocus" bindblur="onBlur"
+               cursor-spacing="40" maxlength="20"
+               placeholder="如：顺丰速运" placeholder-class="ph-text" />
+      </view>
+
+      <view class="field" wx:if="{{method !== 'self'}}">
+        <view class="field-label">{{method === 'express' ? '运单号' : '平台订单号'}}<text class="req">*</text></view>
+        <input class="input" type="text" model:value="{{trackingNo}}" data-key="trackingNo"
+               bindinput="onField" bindfocus="onFocus" bindblur="onBlur"
+               cursor-spacing="40" maxlength="40"
+               placeholder="字母数字，至少 4 位" placeholder-class="ph-text" />
+      </view>
+
+      <view class="field" wx:if="{{method === 'self'}}">
+        <view class="field-label">配送安排 / 联系人<text class="req">*</text></view>
+        <input class="input" type="text" model:value="{{contact}}" data-key="contact"
+               bindinput="onField" bindfocus="onFocus" bindblur="onBlur"
+               cursor-spacing="40" maxlength="40"
+               placeholder="如：自有货车，李师傅 138****" placeholder-class="ph-text" />
+      </view>
+
+      <view class="field">
+        <view class="field-label">预计到达</view>
+        <picker mode="date" value="{{estimatedAt || today}}" start="{{today}}" bindchange="onDate">
+          <view class="picker-box">
+            <text class="{{estimatedAt ? 'picked' : 'ph-text'}}">{{estimatedAt || '选择日期（选填，不早于今天）'}}</text>
+            <text class="picker-arrow">▾</text>
+          </view>
+        </picker>
+        <view class="date-clear" wx:if="{{estimatedAt}}" bindtap="clearDate">清除所选日期</view>
+      </view>
+
+      <view class="field last">
+        <view class="field-label">配送备注</view>
+        <textarea class="textarea" model:value="{{note}}" data-key="note"
+                  bindinput="onField" bindfocus="onFocus" bindblur="onBlur"
+                  cursor-spacing="40" maxlength="300" auto-height
+                  placeholder="选填，如车辆信息、卸货要求" placeholder-class="ph-text" />
+      </view>
+    </view>
+
+    <view class="filled" wx:if="{{filledText}}">已填写：{{filledText}}</view>
+  </view>
+
+  <view class="notice">演示提示：配送信息仅用于流程演示，单号需为 4-100 位字母、数字、下划线或连字符。</view>
+
+  <view class="bottom-bar {{typing ? 'typing' : ''}}">
+    <view class="total">
+      <view class="total-num">{{totalQty}} 件</view>
+      <view class="tiny muted">第 {{batchNo}} 批</view>
+    </view>
+    <view class="btn {{submitting ? 'disabled' : ''}}" bindtap="submit">{{submitting ? '提交中…' : '确认发货'}}</view>
+  </view>
+</view>

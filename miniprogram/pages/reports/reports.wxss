@@ -1,0 +1,82 @@
+.head {
+  background: linear-gradient(140deg, #183654, #2966a5);
+  color: #fff; padding: 30rpx 32rpx 34rpx; border-radius: 0 0 30rpx 30rpx;
+}
+.head-title { font-size: 34rpx; font-weight: 700; }
+.head-sub { font-size: 22rpx; color: #b9cde2; margin-top: 6rpx; }
+.head-metrics { display: flex; margin-top: 22rpx; }
+.hm { flex: 1; }
+.hm-num { font-size: 32rpx; font-weight: 700; }
+.hm-label { font-size: 20rpx; color: #b9cde2; margin-top: 2rpx; }
+
+.funnel { margin-bottom: 18rpx; }
+.funnel-label { font-size: 24rpx; color: #34495f; }
+.funnel-value { font-size: 26rpx; font-weight: 700; color: #183654; }
+.bar { height: 12rpx; background: #eef2f8; border-radius: 999rpx; overflow: hidden; margin-top: 8rpx; }
+.bar-in { height: 100%; border-radius: 999rpx; background: #183654; }
+.bar-in.navy { background: #183654; }
+.bar-in.blue { background: #2966a5; }
+.bar-in.green { background: #13855b; }
+.bar-in.warn { background: #d99b3d; }
+.bar-in.bad { background: #c94a3f; }
+
+.kv-line {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 16rpx; padding-top: 16rpx; border-top: 1rpx dashed #e6edf6; font-size: 24rpx;
+}
+
+.zone { padding: 16rpx 0; border-bottom: 1rpx solid #eef2f8; }
+.zone:last-child { border-bottom: none; }
+
+.sup-row { padding: 16rpx 0; border-bottom: 1rpx solid #eef2f8; }
+.sup-row:last-child { border-bottom: none; }
+.sup-grid { display: flex; gap: 12rpx; margin-top: 10rpx; }
+.sg { flex: 1; background: #f7fafd; border-radius: 12rpx; padding: 12rpx; }
+.sg-label { font-size: 19rpx; color: #7d8fa2; }
+.sg-num { font-size: 23rpx; font-weight: 700; color: #183654; margin-top: 2rpx; }
+
+.dept {
+  display: flex; align-items: center; padding: 18rpx 22rpx;
+  border-bottom: 1rpx solid #eef2f8; font-size: 22rpx;
+}
+.dept:last-child { border-bottom: none; }
+.dept-head { background: #f7fafd; color: #5d7186; font-weight: 700; }
+.dept-total {
+  background: #f7fafd; font-weight: 700;
+  border-top: 1rpx solid #e2eaf4; border-bottom: none;
+}
+.dept-total .d-name, .dept-total .d-num { color: #183654; }
+.d-name { flex: 1.5; color: #24354a; }
+.d-num { flex: 1; text-align: right; color: #34495f; }
+
+.recon { padding: 22rpx; border-bottom: 1rpx solid #eef2f8; }
+.recon:last-child { border-bottom: none; }
+.recon-id { font-size: 27rpx; font-weight: 700; color: #183654; }
+.recon-sub { font-size: 22rpx; color: #718299; margin-top: 8rpx; }
+.recon-foot { margin-top: 12rpx; }
+.recon-actions { display: flex; justify-content: flex-end; margin-top: 14rpx; }
+.recon-actions .btn + .btn { margin-left: 12rpx; }
+
+/* 预算合计（战区 / 全公司） */
+.budget-total {
+  padding: 14rpx 0 18rpx; margin-bottom: 10rpx;
+  border-bottom: 1rpx dashed #e3ebf5;
+}
+
+/* 预算：科目拆分 */
+.budget-cats { display: flex; gap: 12rpx; margin: 16rpx 0 6rpx; }
+.budget-cat { flex: 1; min-width: 0; background: #f8fbfe; border: 1rpx solid #e8f0f8; border-radius: 16rpx; padding: 14rpx 16rpx; }
+.budget-cat-name { font-size: 21rpx; color: #5d7186; }
+.budget-cat-amt { font-size: 26rpx; font-weight: 700; color: #183654; margin-top: 4rpx; }
+.budget-items { margin-top: 12rpx; padding: 6rpx 16rpx 12rpx; background: #fafcff; border-radius: 14rpx; }
+.budget-item { padding: 10rpx 0; }
+.budget-item-name { font-size: 23rpx; color: #33506f; }
+.bar.sm { height: 6rpx; }
+
+/* 战区金额 */
+.zone-item { margin-bottom: 16rpx; }
+.zone-item:last-child { margin-bottom: 0; }
+.zone-budget {
+  margin-top: 14rpx; padding-top: 12rpx;
+  border-top: 1rpx dashed #e6edf5;
+}

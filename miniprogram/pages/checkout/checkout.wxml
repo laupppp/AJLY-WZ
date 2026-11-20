@@ -1,0 +1,150 @@
+<view class="page">
+  <view class="head">
+    <view class="head-title">{{mode === 'store' ? '门店采购下单' : (me.role === 'central' ? '运营管理部自采下单' : '部门采购下单')}}</view>
+    <view class="head-sub">{{mode === 'store' ? storeName : deptName}}</view>
+    <view class="head-amount">¥{{totalText}}</view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">商品清单</view>
+      <view class="card-sub">{{items.length}} 种</view>
+    </view>
+    <view class="line-item" wx:for="{{items}}" wx:key="id">
+      <view class="between">
+        <view class="flex1">
+          <view class="line-name">{{item.name}}</view>
+          <view class="line-sub">{{item.spec}}</view>
+        </view>
+        <view class="right">
+          <view class="money">¥{{item.price}}</view>
+          <view class="tiny muted">×{{item.qty}}{{item.unit}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 门店采购 -->
+  <block wx:if="{{mode === 'store'}}">
+    <view class="card">
+      <view class="card-head"><view class="card-title">收货信息</view></view>
+      <view class="field">
+        <text class="field-label">收货地址<text class="req">*</text></text>
+        <input class="input" value="{{address}}" data-key="address" bindinput="onField" placeholder="门店收货地址" />
+      </view>
+      <view class="field">
+        <text class="field-label">收货人<text class="req">*</text></text>
+        <input class="input" value="{{receiver}}" data-key="receiver" bindinput="onField" placeholder="门店授权收货人" />
+      </view>
+      <view class="field">
+        <text class="field-label">采购用途</text>
+        <input class="input" value="{{purpose}}" data-key="purpose" bindinput="onField" placeholder="如：门店日常运营" />
+      </view>
+      <view class="field">
+        <text class="field-label">期望交付日期</text>
+        <picker mode="date" value="{{due}}" bindchange="onDue">
+          <view class="picker-box">
+            <text>{{due || '待供应商确认'}}</text>
+            <text class="muted">▾</text>
+          </view>
+        </picker>
+      </view>
+      <view class="field" style="margin-bottom:0">
+        <text class="field-label">备注</text>
+        <textarea class="textarea" value="{{note}}" data-key="note" bindinput="onField" placeholder="选填，最多 500 字" maxlength="500" />
+      </view>
+    </view>
+
+    <view class="card" wx:if="{{quote}}">
+      <view class="card-head">
+        <view class="card-title">后台试算</view>
+        <view class="card-sub">演示预算</view>
+      </view>
+      <view class="kv"><text class="muted">合计金额</text><text class="money">¥{{quote.total}}</text></view>
+      <view class="kv"><text class="muted">科目可用额度</text><text>¥{{quote.available}}</text></view>
+      <view class="kv" wx:if="{{quote.overBudget}}">
+        <text class="muted">超出金额</text>
+        <text class="money-red">¥{{quote.overAmount}}</text>
+      </view>
+      <view class="kv" wx:if="{{quote.overBudget}}">
+        <text class="muted">单笔可核定上限</text>
+        <text class="{{quote.hardOver ? 'money-red' : ''}}">¥{{quote.maxSupport}}</text>
+      </view>
+      <view class="quote-items" wx:if="{{quoteItems.length}}">
+        <view class="quote-item" wx:for="{{quoteItems}}" wx:key="key">
+          <view class="between">
+            <text class="quote-item-name">{{item.name}}</text>
+            <text class="quote-item-amt {{item.over ? 'money-red' : ''}}">¥{{item.totalText}}</text>
+          </view>
+          <view class="qbar mt8"><view class="qbar-in {{item.over ? 'bad' : 'blue'}}" style="width:{{item.pct}}%"></view></view>
+          <view class="tiny muted mt8">
+            该科目可用 ¥{{item.usableText}}{{item.over ? ' · 超 ¥' + item.overText : ''}}
+          </view>
+        </view>
+      </view>
+      <view class="notice {{quote.overBudget ? 'warn' : ''}}" style="margin:18rpx 0 0">
+        审批路径：{{quote.pathText}}
+      </view>
+    </view>
+  </block>
+
+  <!-- 部门采购 -->
+  <block wx:else>
+    <view class="card">
+      <view class="card-head"><view class="card-title">采购信息</view></view>
+      <view class="field">
+        <text class="field-label">采购用途</text>
+        <input class="input" value="{{purpose}}" data-key="purpose" bindinput="onField" placeholder="如：部门日常采购" />
+      </view>
+      <view class="field" style="margin-bottom:0">
+        <text class="field-label">备注</text>
+        <textarea class="textarea" value="{{note}}" data-key="note" bindinput="onField" placeholder="选填，最多 300 字" maxlength="300" />
+      </view>
+    </view>
+
+    <view class="notice">{{me.role === 'central' ? '按配送地点拆分为多个子订单，提交后由本部门确认再发送供应商。' : '按配送地点拆分为多个子订单，统一由运营管理部确认后发送供应商。'}}每个地点需分配自己的商品数量。</view>
+
+    <view class="dest" wx:for="{{destViews}}" wx:key="key" wx:for-index="di">
+      <view class="dest-head">
+        <view class="pill {{item.type === 'office' ? 'dark' : 'info'}}">{{item.type === 'office' ? '公司总部' : '门店配送'}}</view>
+        <view class="dest-name">{{item.name}}</view>
+        <view class="dest-remove" wx:if="{{destViews.length > 1}}" data-index="{{di}}" bindtap="removeDest">删除</view>
+      </view>
+      <view class="field">
+        <text class="field-label">收货地址<text class="req">*</text></text>
+        <input class="input" value="{{item.address}}" data-index="{{di}}" data-key="address" bindinput="onDestField" placeholder="详细地址" />
+      </view>
+      <view class="field">
+        <text class="field-label">收货人<text class="req">*</text></text>
+        <input class="input" value="{{item.receiver}}" data-index="{{di}}" data-key="receiver" bindinput="onDestField" placeholder="收货人" />
+      </view>
+      <view class="alloc-title">分配商品 · 小计 ¥{{item.totalText}}</view>
+      <view class="alloc" wx:for="{{item.rows}}" wx:key="id" wx:for-item="row">
+        <view class="flex1">
+          <view class="line-name">{{row.name}}</view>
+          <view class="tiny muted">本地点可分配 {{row.cap}}{{row.unit}}</view>
+        </view>
+        <view class="stepper">
+          <view class="btn-step" data-dest="{{di}}" data-id="{{row.id}}" data-delta="-1" bindtap="changeAlloc">−</view>
+          <view class="num">{{row.qty}}</view>
+          <view class="btn-step add" data-dest="{{di}}" data-id="{{row.id}}" data-delta="1" bindtap="changeAlloc">＋</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="dest-actions">
+      <picker mode="selector" range="{{stores}}" bindchange="addStoreDest">
+        <view class="btn ghost sm">＋ 添加门店配送点</view>
+      </picker>
+      <view class="btn gray sm" bindtap="addOfficeDest">＋ 添加总部配送点</view>
+    </view>
+  </block>
+
+  <view class="bottom-bar">
+    <view class="total">
+      <view class="total-num">¥{{totalText}}</view>
+      <view class="tiny muted">{{mode === 'store' ? '含税演示金额' : destViews.length + ' 个配送地点'}}</view>
+    </view>
+    <view class="btn {{submitting ? 'disabled' : ''}}" bindtap="submit">{{submitting ? '提交中…' : (mode === 'store' ? '提交采购申请' : '提交部门采购')}}</view>
+  </view>
+</view>

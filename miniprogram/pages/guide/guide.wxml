@@ -1,0 +1,98 @@
+<view class="page">
+  <view class="guide-hero">
+    <view class="gh-title">物资采购流程说明</view>
+    <view class="gh-sub">从下单到对账一共 8 步，门店单先审核、验收后双方确认结算金额。</view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">全流程</view>
+      <view class="card-sub">按顺序推进，任一步驳回即结束</view>
+    </view>
+    <view class="step" wx:for="{{steps}}" wx:key="n">
+      <view class="step-n">{{item.n}}</view>
+      <view class="flex1">
+        <view class="step-title">{{item.title}}</view>
+        <view class="step-desc">{{item.desc}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">审批分级</view>
+      <view class="card-sub">按单笔金额自动判定</view>
+    </view>
+    <view class="tier" wx:for="{{tiers}}" wx:key="range">
+      <view class="tier-range">{{item.range}}</view>
+      <view class="flex1">
+        <view class="tier-path">{{item.path}}</view>
+        <view class="tier-note">{{item.note}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">费用预算</view>
+      <view class="card-sub">额度 = 管理房间数 × 科目系数</view>
+    </view>
+    <view class="formula">
+      <text class="formula-main">每店额度 = 房间数 × 系数</text>
+      <text class="formula-sub">示例：1000 间房 × 10 元/间 = 每个科目 ¥10,000</text>
+    </view>
+    <view class="brow" wx:for="{{budgets}}" wx:key="name">
+      <view class="flex1">
+        <view class="brow-name">{{item.name}}</view>
+        <view class="brow-scope">{{item.scope}}</view>
+      </view>
+      <view class="brow-sample">{{item.sample}}</view>
+    </view>
+    <view class="guide-tip">订单按商品大类自动归科目，一张单跨科目时分别占用各自额度；额度不足需运营管理部核定后才能继续。</view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">结算与对账</view>
+      <view class="card-sub">金额以双方共同确认为准</view>
+    </view>
+    <view class="guide-p">
+      验收完成后进入结算环节：<text class="strong">门店填写实际结算金额</text>，
+      <text class="strong">供应商在自己的账号确认</text>。因产品问题、少发或退款导致结算金额与申请金额不一致时，必须填写差异原因。
+    </view>
+    <view class="guide-p">供应商提出异议的，退回门店重新核对并再次提交；双方确认一致后，该笔订单才进入统一对账。</view>
+    <view class="guide-p">对账按供应商汇总已确认的结算金额生成对账单，供应商确认后由运营管理部锁定，订单转为已完成。</view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">角色权限</view>
+      <view class="card-sub">按最小必要授权</view>
+    </view>
+    <view class="rrow" wx:for="{{roles}}" wx:key="name">
+      <view class="flex1">
+        <view class="rrow-name">{{item.name}}</view>
+        <view class="rrow-duty">{{item.duty}}</view>
+      </view>
+      <view class="rrow-limit">{{item.limit}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">时效要求</view>
+      <view class="card-sub">超时会进入预警</view>
+    </view>
+    <view class="srow" wx:for="{{slas}}" wx:key="name">
+      <view class="flex1">
+        <view class="srow-name">{{item.name}}</view>
+        <view class="srow-note">{{item.note}}</view>
+      </view>
+      <view class="srow-hours">{{item.hours}}</view>
+    </view>
+  </view>
+
+  <view class="foot-note">演示版口径，实际执行以公司采购制度为准。</view>
+
+  <view class="guide-pad"></view>
+</view>

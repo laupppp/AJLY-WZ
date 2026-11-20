@@ -1,0 +1,129 @@
+<view class="page" wx:if="{{order}}">
+  <view class="head">
+    <view class="between">
+      <view class="head-id-row" bindtap="copyId">
+        <text class="head-id">{{order.id}}</text>
+        <text class="copy-chip">复制</text>
+      </view>
+      <view class="pill {{order.statusCls}}">{{order.statusLabel}}</view>
+    </view>
+    <view class="head-amount">¥{{order.totalText}}</view>
+    <view class="head-meta">{{order.owner}}<text wx:if="{{order.purpose}}"> · {{order.purpose}}</text></view>
+    <view class="head-meta" wx:if="{{order.finishedAt}}">完成验收 {{order.finishedAt}}</view>
+  </view>
+
+  <view class="notice">
+    验收完成后需共同确认最终结算金额：门店按实际到货与折让填写，供应商在自己的账号确认。双方一致后该金额进入统一对账。
+  </view>
+
+  <!-- 验收明细 -->
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">验收明细</view>
+      <view class="card-sub">按实收数量核算</view>
+    </view>
+    <view class="line" wx:for="{{lines}}" wx:key="id">
+      <view class="between">
+        <view class="flex1">
+          <view class="line-name">{{item.name}}</view>
+          <view class="line-sub">{{item.spec || '规格以合同为准'}} · {{item.supplier}}</view>
+        </view>
+        <view class="line-amt">¥{{item.amountText}}</view>
+      </view>
+      <view class="line-foot">
+        <text class="tiny muted">实收 {{item.qty}} / 订购 {{item.orderQty}} {{item.unit}}</text>
+        <text class="tiny muted">¥{{item.priceText}}/{{item.unit}}</text>
+      </view>
+    </view>
+    <view class="sum-line">
+      <text class="sl-k">实收核算金额</text>
+      <text class="sl-v">¥{{itemsAmountText}}</text>
+    </view>
+  </view>
+
+  <!-- 门店 / 部门：填写结算金额 -->
+  <view class="card" wx:if="{{isStoreSide && editable}}">
+    <view class="card-head">
+      <view class="card-title">填写结算金额</view>
+      <view class="card-sub">与前一步实收核算不一致时需说明原因</view>
+    </view>
+    <view class="amount-box">
+      <text class="ab-cur">¥</text>
+      <input class="ab-input" type="digit" value="{{amount}}" bindinput="onAmount" placeholder="0.00" />
+    </view>
+    <view class="diff-line {{hasDiff ? (diff < 0 ? 'bad' : 'warn') : 'ok'}}" wx:if="{{hasDiff}}">
+      与实收核算相差 {{diff < 0 ? '少结' : '多结'}} ¥{{diffText}}
+    </view>
+    <view class="diff-line ok" wx:else>与实收核算一致</view>
+
+    <view class="field" wx:if="{{hasDiff}}">
+      <text class="field-label">差异原因</text>
+      <input class="input" value="{{reason}}" bindinput="onReason" maxlength="200"
+             placeholder="如：到货破损 2 件退款、少发 1 箱折让（至少4个字）" />
+    </view>
+
+    <view class="btn block mt16 {{canSubmit ? '' : 'disabled'}}" bindtap="submit">提交结算金额</view>
+    <view class="tiny muted mt8" wx:if="{{!canSubmit && hasDiff}}">请填写至少 4 个字的差异原因后再提交</view>
+  </view>
+
+  <!-- 供应商：确认或异议 -->
+  <view class="card" wx:if="{{isSupplierSide && order.status === 'settle-supplier'}}">
+    <view class="card-head">
+      <view class="card-title">门店提交的结算金额</view>
+      <view class="card-sub">{{settlement.statusText}}</view>
+    </view>
+    <view class="sum-line strong-line">
+      <text class="sl-k">结算金额</text>
+      <text class="sl-v money">¥{{settlement.amountText}}</text>
+    </view>
+    <view class="kv" wx:if="{{settlement.reason}}"><text class="k">差异原因</text><text class="v">{{settlement.reason}}</text></view>
+    <view class="kv"><text class="k">门店</text><text class="v">{{settlement.byName}}</text></view>
+    <view class="kv"><text class="k">提交时间</text><text class="v">{{settlement.submittedAt}}</text></view>
+
+    <view class="btn-row mt16">
+      <view class="btn ghost" bindtap="toggleDispute">提出异议</view>
+      <view class="btn" bindtap="confirm">确认金额</view>
+    </view>
+
+    <block wx:if="{{showDispute}}">
+      <view class="field mt16">
+        <text class="field-label">异议说明</text>
+        <input class="input" value="{{disputeReason}}" bindinput="onDisputeReason" maxlength="200"
+               placeholder="如：折让金额过低，应为 115 元（至少4个字）" />
+      </view>
+      <view class="btn block ghost mt8" bindtap="dispute">提交异议，退回门店</view>
+    </block>
+  </view>
+
+  <!-- 已有结算记录 -->
+  <view class="card" wx:if="{{settlement}}">
+    <view class="card-head">
+      <view class="card-title">结算记录</view>
+      <view class="card-sub">第 {{settlement.round}} 次提交 · {{settlement.statusText}}</view>
+    </view>
+    <view class="kv"><text class="k">结算金额</text><text class="v money">¥{{settlement.amountText}}</text></view>
+    <view class="kv" wx:if="{{settlement.reason}}"><text class="k">差异原因</text><text class="v">{{settlement.reason}}</text></view>
+    <view class="kv"><text class="k">门店提交</text><text class="v">{{settlement.byName}} · {{settlement.submittedAt}}</text></view>
+    <view class="kv" wx:if="{{settlement.confirmedAt}}"><text class="k">供应商确认</text><text class="v">{{settlement.confirmedAt}}</text></view>
+    <view class="sd-row" wx:for="{{settlement.disputes}}" wx:key="at">
+      <view class="sd-head">供应商异议 · {{item.by}}</view>
+      <view class="sd-text">{{item.reason}}</view>
+      <view class="sd-at">{{item.at}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{!isStoreSide && !isSupplierSide}}">
+    <view class="empty" style="padding:20rpx 0">
+      <view class="empty-text">当前身份不能处理这笔结算</view>
+      <view class="tiny muted" style="margin-top:8rpx">结算由收货门店与供应商共同确认</view>
+    </view>
+  </view>
+
+  <view class="link-row" bindtap="goDetail">查看订单详情 ›</view>
+  <view class="page-pad"></view>
+</view>
+
+<view class="empty" wx:else>
+  <view class="empty-icon">🧾</view>
+  <view class="empty-text">订单不存在或已被删除</view>
+</view>

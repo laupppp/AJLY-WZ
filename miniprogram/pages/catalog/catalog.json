@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "采购下单",
+  "usingComponents": {
+    "tabbar": "/components/tabbar/tabbar"
+  },
+  "enablePullDownRefresh": true
+}

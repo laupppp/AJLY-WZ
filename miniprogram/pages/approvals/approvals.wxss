@@ -1,0 +1,93 @@
+.head {
+  background: linear-gradient(140deg, #183654, #2966a5);
+  color: #fff; padding: 30rpx 32rpx 36rpx; border-radius: 0 0 30rpx 30rpx;
+}
+.head-title { font-size: 34rpx; font-weight: 700; }
+.head-sub { font-size: 22rpx; color: #b9cde2; margin-top: 6rpx; }
+.head-budget { font-size: 22rpx; color: #d7e6f4; margin-top: 12rpx; }
+
+.ap-card {
+  background: #fff; border: 1rpx solid #e8eef6; border-radius: 22rpx;
+  padding: 24rpx; margin: 20rpx 24rpx; box-shadow: 0 4rpx 16rpx rgba(20, 45, 70, .04);
+}
+.ap-title { font-size: 28rpx; font-weight: 700; color: #183654; flex: 1; }
+.ap-sub { font-size: 23rpx; color: #718299; margin-top: 10rpx; }
+.ap-foot { margin-top: 16rpx; padding-top: 16rpx; border-top: 1rpx dashed #eef2f8; }
+.ap-sla { font-size: 21rpx; color: #9a6216; }
+.ap-sla.overdue { color: #b0413a; font-weight: 600; }
+.ap-sla.normal { color: #7d8fa2; }
+.ap-actions { display: flex; gap: 14rpx; margin-top: 16rpx; justify-content: flex-end; }
+
+.log { padding: 14rpx 0; border-bottom: 1rpx solid #eef2f8; }
+.log:last-child { border-bottom: none; }
+.log-title { font-size: 25rpx; color: #24354a; font-weight: 600; }
+.log-sub { font-size: 21rpx; color: #718299; margin-top: 4rpx; }
+
+/* 预算核定缺口提示（卡片内） */
+.ap-budget {
+  margin-top: 12rpx; padding: 12rpx 16rpx; border-radius: 12rpx;
+  font-size: 21rpx; line-height: 1.5;
+  background: #eef5ff; color: #2b5c8f;
+}
+.ap-budget.bad { background: #fdeeeb; color: #a4453c; }
+
+/* 预算缺口弹层 */
+.gap-mask { position: fixed; inset: 0; background: rgba(16, 33, 51, 0.45); z-index: 50; }
+.gap-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  background: #ffffff; border-radius: 30rpx 30rpx 0 0;
+  padding: 26rpx 28rpx calc(26rpx + env(safe-area-inset-bottom));
+  max-height: 86vh; overflow-y: auto;
+}
+.gap-head { padding-bottom: 16rpx; border-bottom: 1rpx solid #eef2f8; }
+.gap-title { font-size: 30rpx; font-weight: 700; color: #b0413a; }
+.gap-sub { font-size: 21rpx; color: #718299; margin-top: 6rpx; }
+
+.gap-rows { padding: 14rpx 0 6rpx; }
+.gap-row { display: flex; align-items: center; justify-content: space-between; padding: 8rpx 0; }
+.gap-k { font-size: 23rpx; color: #718299; }
+.gap-v { font-size: 25rpx; color: #24354a; }
+.gap-v.strong { font-weight: 700; color: #183654; }
+.gap-row-bad .gap-k { color: #a4453c; font-weight: 600; }
+.gap-row-bad .gap-v { color: #c0392b; font-weight: 700; }
+.gap-tip {
+  font-size: 21rpx; line-height: 1.6; color: #7c5a1d;
+  background: #fff8ec; border-radius: 14rpx; padding: 16rpx 18rpx;
+}
+
+.gap-block { margin-top: 22rpx; }
+.gap-block-title { font-size: 23rpx; font-weight: 700; color: #183654; margin-bottom: 12rpx; }
+.gap-input-row { display: flex; align-items: center; gap: 10rpx; margin-bottom: 14rpx; }
+.gap-cur { font-size: 28rpx; color: #183654; font-weight: 700; }
+.gap-input {
+  flex: 1; min-width: 0; height: 76rpx; background: #f7fafd;
+  border: 1rpx solid #dde6f0; border-radius: 14rpx;
+  padding: 0 18rpx; font-size: 27rpx; color: #24354a;
+}
+.gap-input-reason { flex: 1.4; font-size: 24rpx; }
+.gap-store {
+  display: flex; align-items: center; padding: 16rpx 18rpx;
+  border: 1rpx solid #e6edf5; border-radius: 14rpx; margin-bottom: 10rpx;
+}
+.gap-store-name { font-size: 25rpx; font-weight: 600; color: #24354a; }
+.gap-store-sub { font-size: 20rpx; color: #718299; margin-top: 4rpx; }
+.gap-store-go { font-size: 22rpx; color: #2966a5; }
+.gap-foot { display: flex; gap: 16rpx; margin-top: 26rpx; }
+.gap-foot .btn { flex: 1; }
+
+/* 缺口：按费用科目拆分 */
+.gap-items { margin-bottom: 18rpx; }
+.gap-items-title { font-size: 22rpx; color: #6b7f94; margin-bottom: 8rpx; }
+.gap-item {
+  padding: 14rpx 20rpx; background: #f8fbfe; border: 1rpx solid #e8f0f8;
+  border-radius: 16rpx; margin-bottom: 8rpx;
+}
+.gap-item-name { font-size: 26rpx; font-weight: 600; color: #33506f; }
+.gap-item-amt { font-size: 26rpx; font-weight: 700; color: #183654; }
+.gap-picks { display: flex; flex-wrap: wrap; gap: 12rpx; margin-bottom: 14rpx; }
+.gap-pick {
+  padding: 10rpx 18rpx; border-radius: 999rpx; font-size: 22rpx;
+  background: #f1f5fa; color: #5d7186; border: 1rpx solid #e2ebf5;
+}
+.gap-pick.on { background: #eaf3fd; color: #1f5d96; border-color: #b9d6f2; font-weight: 600; }
+.ap-budget.info { background: #f3f7fb; color: #5d7891; }

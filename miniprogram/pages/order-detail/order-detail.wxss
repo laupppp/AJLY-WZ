@@ -1,0 +1,57 @@
+.page { padding-bottom: 200rpx; }
+
+.head {
+  background: linear-gradient(140deg, #183654, #2966a5);
+  color: #fff; padding: 30rpx 32rpx 36rpx; border-radius: 0 0 30rpx 30rpx;
+}
+.head-id { font-size: 34rpx; font-weight: 700; letter-spacing: 1rpx; }
+.head-id-row { display: flex; align-items: center; }
+.copy-chip {
+  font-size: 19rpx; color: #d5e4f2; margin-left: 14rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.32); border-radius: 999rpx;
+  padding: 2rpx 14rpx;
+}
+.copy-inline {
+  font-size: 19rpx; color: #5d7186; margin-left: 14rpx;
+  background: #eef5ff; border-radius: 6rpx; padding: 2rpx 10rpx;
+}
+.head-amount { font-size: 48rpx; font-weight: 700; margin-top: 12rpx; }
+.head-meta { font-size: 23rpx; color: #c3d5e6; margin-top: 6rpx; }
+.head .sla { margin-top: 12rpx; font-size: 22rpx; color: #ffd9a8; }
+
+.kv { display: flex; padding: 10rpx 0; font-size: 25rpx; }
+.kv .k { width: 150rpx; color: #718299; flex-shrink: 0; }
+.kv .v { flex: 1; color: #24354a; text-align: right; }
+
+.item { padding: 18rpx 0; border-bottom: 1rpx solid #eef2f8; }
+.item:last-child { border-bottom: none; }
+.item-tags { display: flex; gap: 10rpx; margin-top: 10rpx; flex-wrap: wrap; }
+.mini-tag {
+  font-size: 19rpx; padding: 4rpx 12rpx; border-radius: 999rpx;
+  background: #f1f5fa; color: #5d7186;
+}
+.mini-tag.good { background: #e6f6ef; color: #117550; }
+.mini-tag.dark { background: #e7edf6; color: #24456b; }
+.mini-tag.warn { background: #fff4e2; color: #9a6216; }
+
+.sup { display: flex; align-items: center; padding: 16rpx 0; border-bottom: 1rpx solid #eef2f8; }
+.sup:last-child { border-bottom: none; }
+
+.delivery { padding: 18rpx 0; border-bottom: 1rpx solid #eef2f8; }
+.delivery:last-child { border-bottom: none; }
+.mono { font-size: 22rpx; color: #2966a5; margin-top: 6rpx; font-family: Menlo, monospace; }
+
+.accept { padding: 18rpx 0; border-bottom: 1rpx solid #eef2f8; }
+.accept:last-child { border-bottom: none; }
+
+.photo-row { display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 16rpx; }
+.photo { width: 138rpx; height: 138rpx; border-radius: 14rpx; background: #f1f5fa; }
+
+/* 结算共同确认 */
+.sd-row {
+  margin-top: 12rpx; padding: 14rpx 16rpx;
+  background: #fdf1ef; border: 1rpx solid #f4d9d4; border-radius: 12rpx;
+}
+.sd-head { font-size: 21rpx; color: #a4453c; font-weight: 600; }
+.sd-text { font-size: 23rpx; color: #4c6280; line-height: 1.55; margin-top: 4rpx; }
+.sd-at { font-size: 19rpx; color: #9aa9b8; margin-top: 4rpx; }

@@ -1,0 +1,83 @@
+# 安居乐寓物资采购管理系统
+
+企业内部物资采购系统的 **H5 版**（可直接挂企业微信自建应用）＋ 与之共用同一份业务规则的微信小程序源码。
+纯静态前端：**无框架、无构建、无 npm 依赖**，浏览器打开即用。
+
+- H5 演示：`h5/standalone.html`（单文件版，双击或 GitHub Pages 直开）
+- 小程序：`miniprogram/`（微信开发者工具导入，需在 `project.config.json` 里换自己的 AppID）
+
+## 业务链路
+
+```
+门店/部门下单 → 战区审核 →（超预算）运营管理部核定 → 金额分级审批
+  → 供应商接单/发货 → 门店收货验收 → 结算金额门店与供应商共同确认
+  → 统一对账 → 锁定
+```
+
+| 角色 | 能做什么 |
+| --- | --- |
+| 门店店长 | 下单、草稿、撤销、收货验收、填写结算金额 |
+| 战区负责人 | 本战区门店单审核（必要性/合规性）、500–2000 元金额审批 |
+| 运营管理部（中台） | 预算核定、部门批次确认、超 2000 元审批、统一对账 |
+| 职能部门 | 部门采购、验收、填写结算金额 |
+| 供应商 | 接单/拒单、分批发货登记、确认结算金额 |
+
+## 本地运行
+
+```bash
+npm run h5:serve        # http://127.0.0.1:8899/index.html
+```
+
+演示身份直达：`?as=<账号ID>`
+
+| 账号 ID | 角色 |
+| --- | --- |
+| `TEST-STORE-A` / `TEST-STORE-B` | 门店店长 |
+| `TEST-REGION-A` / `TEST-REGION-B` | 战区负责人 |
+| `TEST-CENTRAL` | 运营管理部（中台） |
+| `TEST-DEPT-01` | 职能部门采购员 |
+| `TEST-SUPPLIER-1` / `TEST-SUPPLIER-2` | 供应商 |
+
+例：`http://127.0.0.1:8899/index.html?as=TEST-SUPPLIER-1#/supplier`
+
+## 目录
+
+```
+h5/                      H5 前端（全部代码）
+├── index.html           单页壳
+├── standalone.html      单文件产物（全部 CSS/JS 内联，双击可开）
+├── css/app.css          全部样式（移动优先，≥900px 桌面段在文件末尾）
+├── build-biz.js         构建：miniprogram/{utils,data} → js/biz.js
+├── build-standalone.js  构建：多文件 → standalone.html
+└── js/
+    ├── biz.js           ★构建产物（勿手改）：业务规则唯一来源
+    ├── store.js         localStorage 持久化
+    ├── session.js       身份（演示身份 + 企业微信免登适配）
+    ├── ui.js            toast/sheet/状态胶囊/图标/金额
+    ├── app.js           hash 路由、渲染、导航徽标
+    └── pages/           15 个页面
+miniprogram/
+├── utils/               domain（状态机/预算/结算）、perm、format —— H5 与小程序共用
+├── data/                catalog（278 项物资）、seed、subcats、budget
+└── pages/               小程序 15 个页面（与 H5 页面一一对应）
+```
+
+## 命令
+
+```bash
+npm run h5:build        # 重建 biz.js（改了 miniprogram 才需要）
+npm run h5:check        # 检查 biz.js 是否过期（过期退出码 1）
+npm run h5:watch        # 监听源文件自动重建
+npm run h5:standalone   # 重新生成单文件版 standalone.html
+```
+
+## 数据说明
+
+演示态：全部数据存浏览器 `localStorage`（前缀 `anju_h5_`），无后端、无账号体系。
+正式上线需要后端（企业微信免登换身份、订单状态机、预算占用的原子扣减），
+接口契约与替换点见 [`h5/README.md`](h5/README.md) 第 5、6 节。
+
+## 文档
+
+- [`h5/README.md`](h5/README.md) —— H5 架构、构建机制、企业微信接入、上线替换清单
+- [`HANDOFF_CHATGPT.md`](HANDOFF_CHATGPT.md) —— 交接说明：代码约定、状态机口径、常见改动配方、已知坑

@@ -1,0 +1,15 @@
+.head {
+  background: linear-gradient(140deg, #183654, #2966a5);
+  color: #fff; padding: 30rpx 32rpx 36rpx; border-radius: 0 0 30rpx 30rpx;
+}
+.head-title { font-size: 34rpx; font-weight: 700; }
+.head-sub { font-size: 22rpx; color: #b9cde2; margin-top: 6rpx; }
+
+.draft-card {
+  background: #fff; border: 1rpx solid #e8eef6; border-radius: 22rpx;
+  padding: 24rpx; margin: 0 24rpx 18rpx; box-shadow: 0 4rpx 16rpx rgba(20, 45, 70, .04);
+}
+.draft-title { font-size: 27rpx; font-weight: 700; color: #183654; flex: 1; }
+.draft-sub { font-size: 22rpx; color: #718299; margin-top: 10rpx; }
+.draft-foot { margin-top: 16rpx; padding-top: 14rpx; border-top: 1rpx dashed #eef2f8; align-items: center; }
+.draft-actions { display: flex; gap: 12rpx; }

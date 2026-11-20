@@ -1,0 +1,37 @@
+<view class="page">
+  <view class="head">
+    <view class="head-title">采购草稿</view>
+    <view class="head-sub">{{me.name}} · {{drafts.length}} 份草稿</view>
+  </view>
+
+  <block wx:if="{{allowed}}">
+    <view class="notice">草稿按当前测试身份隔离保存，不占用预算、不触发审批与供应商订单。</view>
+
+    <view class="draft-card" wx:for="{{drafts}}" wx:key="id">
+      <view class="between">
+        <view class="draft-title">{{item.title}}</view>
+        <view class="pill {{item.purchaseType === 'department' ? 'dark' : 'info'}}">{{item.purchaseType === 'department' ? '部门' : '门店'}}</view>
+      </view>
+      <view class="draft-sub">{{item.contextName}} · {{item.kind}}</view>
+      <view class="between draft-foot">
+        <view class="tiny muted">更新于 {{item.updated}}</view>
+        <view class="draft-actions">
+          <view class="btn sm gray" data-id="{{item.id}}" bindtap="remove">删除</view>
+          <view class="btn sm" data-id="{{item.id}}" bindtap="restore">继续填写</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty" wx:if="{{!drafts.length}}">
+      <view class="empty-icon">🗂</view>
+      <view class="empty-text">还没有草稿</view>
+      <view class="btn ghost sm" style="margin-top:24rpx;width:260rpx" bindtap="goCatalog">去采购下单</view>
+    </view>
+  </block>
+
+  <view class="empty" wx:else>
+    <view class="empty-icon">🔐</view>
+    <view class="empty-text">仅门店店长与职能部门采购员可使用草稿箱</view>
+    <view class="btn ghost sm" style="margin-top:24rpx;width:260rpx" bindtap="goIdentity">切换身份</view>
+  </view>
+</view>

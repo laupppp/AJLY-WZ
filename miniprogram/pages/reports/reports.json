@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "统计与对账",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "tabbar": "/components/tabbar/tabbar"
+  }
+}

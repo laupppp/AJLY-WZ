@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#183654">
+<title>安居乐寓物资采购管理系统</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.6 12 4l8 6.6V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2.2l2.2 10.4a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L21 7H6.4"/><circle cx="10" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></symbol>
+  <symbol id="i-orders" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5 9 17.5 20 6.5"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M2 6h11v10H2zM13 9h4.5l3.5 3.5V16h-8"/><circle cx="6.5" cy="18.5" r="1.6"/><circle cx="17.5" cy="18.5" r="1.6"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4S18.3 16.4 19.5 20"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 4 7 12l8 8"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 4l8 8-8 8"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13.5" r="3.4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19z"/><path d="M12 9v5"/><circle cx="12" cy="17" r="1"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.5l3.5 2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4h-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></symbol>
+  <symbol id="i-bill" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+  <symbol id="i-shop" viewBox="0 0 24 24"><path d="M4 9h16v11H4z"/><path d="M3 9l2-5h14l2 5"/><path d="M9 20v-6h6v6"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/><path d="M3 12h18"/></symbol>
+</svg>
+
+<div id="toast-host" class="toast-host"></div>
+<div id="sheet-host"></div>
+
+<div class="shell">
+  <aside class="side" id="side">
+    <div class="side-brand">
+      <div class="side-logo">安</div>
+      <div class="side-brand-text">
+        <strong>物资采购管理</strong>
+        <span>ANJU PURCHASE</span>
+      </div>
+    </div>
+    <nav class="side-nav" id="side-nav"></nav>
+    <div class="side-foot">
+      <a class="side-user" href="#/profile" id="side-user"></a>
+      <div class="side-note">演示环境 · 数据保存在本机</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar" id="topbar">
+      <button class="topbar-back" id="btn-back" aria-label="返回"><svg class="ic"><use href="#i-back"/></svg></button>
+      <h1 class="topbar-title" id="topbar-title">首页</h1>
+      <div class="topbar-act" id="topbar-act"></div>
+    </header>
+    <main class="view" id="view"></main>
+    <nav class="tabbar" id="tabbar"></nav>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/biz.js"></script>
+<script src="js/store.js"></script>
+<script src="js/session.js"></script>
+<script src="js/ui.js"></script>
+<script>window.Views = window.Views || {};</script>
+<script src="js/pages/login.js"></script>
+<script src="js/pages/home.js"></script>
+<script src="js/pages/catalog.js"></script>
+<script src="js/pages/checkout.js"></script>
+<script src="js/pages/orders.js"></script>
+<script src="js/pages/order-detail.js"></script>
+<script src="js/pages/approvals.js"></script>
+<script src="js/pages/supplier.js"></script>
+<script src="js/pages/accept.js"></script>
+<script src="js/pages/reports.js"></script>
+<script src="js/pages/profile.js"></script>
+<script src="js/pages/drafts.js"></script>
+<script src="js/pages/budget.js"></script>
+<script src="js/pages/guide.js"></script>
+<script src="js/pages/settle.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

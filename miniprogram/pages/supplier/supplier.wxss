@@ -1,0 +1,30 @@
+.head {
+  background: linear-gradient(140deg, #183654, #2966a5);
+  color: #fff; padding: 30rpx 32rpx 36rpx; border-radius: 0 0 30rpx 30rpx;
+}
+.head-title { font-size: 34rpx; font-weight: 700; }
+.head-sub { font-size: 23rpx; color: #c3d5e6; margin-top: 6rpx; }
+.head-stats { display: flex; margin-top: 22rpx; }
+.hs { flex: 1; }
+.hs-num { font-size: 34rpx; font-weight: 700; }
+.hs-label { font-size: 20rpx; color: #b9cde2; margin-top: 2rpx; }
+
+.sup-card {
+  background: #fff; border: 1rpx solid #e8eef6; border-radius: 22rpx;
+  padding: 24rpx; margin: 0 24rpx 18rpx; box-shadow: 0 4rpx 16rpx rgba(20, 45, 70, .04);
+}
+.sup-id { font-size: 28rpx; font-weight: 700; color: #183654; }
+.sup-store { font-size: 25rpx; color: #34495f; margin-top: 10rpx; }
+.sup-items { font-size: 23rpx; color: #718299; margin-top: 6rpx; }
+.sup-foot { margin-top: 14rpx; padding-top: 14rpx; border-top: 1rpx dashed #eef2f8; }
+.sup-sla { margin-top: 10rpx; font-size: 21rpx; color: #9a6216; }
+.sup-sla.overdue { color: #b0413a; font-weight: 600; }
+.issue-note {
+  margin-top: 10rpx; padding: 12rpx 16rpx; border-radius: 12rpx;
+  background: #fdecea; color: #a8382f; font-size: 21rpx; line-height: 1.5;
+}
+.mono { font-size: 21rpx; color: #2966a5; margin-top: 8rpx; font-family: Menlo, monospace; }
+.sup-actions { display: flex; gap: 14rpx; justify-content: flex-end; margin-top: 16rpx; }
+/* 整卡可点进入详情，给一点按压反馈 */
+.sup-card:active { background: #f8fbff; }
+.empty .empty-text { line-height: 1.7; padding: 0 16rpx; }

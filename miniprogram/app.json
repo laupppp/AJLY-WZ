@@ -1,0 +1,32 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/catalog/catalog",
+    "pages/checkout/checkout",
+    "pages/orders/orders",
+    "pages/order-detail/order-detail",
+    "pages/approvals/approvals",
+    "pages/supplier/supplier",
+    "pages/ship/ship",
+    "pages/accept/accept",
+    "pages/reports/reports",
+    "pages/identity/identity",
+    "pages/drafts/drafts",
+    "pages/budget/budget",
+    "pages/guide/guide",
+    "pages/settle/settle"
+  ],
+  "window": {
+    "navigationBarTitleText": "物资采购管理",
+    "navigationBarBackgroundColor": "#183654",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f4f7fb",
+    "backgroundTextStyle": "light"
+  },
+  "usingComponents": {
+    "tabbar": "/components/tabbar/tabbar"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

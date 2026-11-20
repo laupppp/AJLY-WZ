@@ -1,0 +1,64 @@
+<view class="page">
+  <view class="head">
+    <view class="head-title">供应商工作台</view>
+    <view class="head-sub">{{isSupplier ? me.supplier : me.name}}</view>
+    <view class="head-stats" wx:if="{{isSupplier}}">
+      <view class="hs"><view class="hs-num">{{stats.pending}}</view><view class="hs-label">待接单</view></view>
+      <view class="hs"><view class="hs-num">{{stats.toship}}</view><view class="hs-label">待发货</view></view>
+      <view class="hs"><view class="hs-num">¥{{stats.amountText}}</view><view class="hs-label">已验收金额</view></view>
+    </view>
+  </view>
+
+  <block wx:if="{{isSupplier}}">
+    <view class="seg">
+      <view class="seg-item {{active === item.key ? 'on' : ''}}" wx:for="{{tabs}}" wx:key="key"
+            data-key="{{item.key}}" bindtap="onTab">{{item.label}} {{item.count}}</view>
+    </view>
+
+    <view class="sup-card accent accent-{{item.cls}}" wx:for="{{orders}}" wx:key="id"
+          data-id="{{item.id}}" bindtap="gotoDetail">
+      <view class="between">
+        <view class="sup-id">{{item.id}}</view>
+        <view class="pill {{item.cls}}">{{item.statusText}}</view>
+      </view>
+      <view class="sup-store">{{item.store}}</view>
+      <view class="sup-items">{{item.itemsText}}</view>
+      <view class="between sup-foot">
+        <view class="tiny muted">{{item.progressText}}{{item.batchCount ? ' · 已发 ' + item.batchCount + ' 批' : ''}}</view>
+        <view class="money">¥{{item.amountText}}</view>
+      </view>
+      <view class="sup-sla {{item.slaLevel}}" wx:if="{{item.slaText}}">⏱ {{item.slaText}}</view>
+      <view class="issue-note" wx:if="{{item.issueText}}">无法接单原因：{{item.issueText}}</view>
+      <view class="mono" wx:if="{{item.lastTracking}}" data-text="{{item.lastTracking}}" catchtap="copyText">最近运单号：{{item.lastTracking}} · 复制</view>
+      <view class="sup-actions">
+        <block wx:if="{{item.canAck}}">
+          <view class="btn sm danger" data-id="{{item.id}}" data-action="issue" catchtap="ack">无法接单</view>
+          <view class="btn sm" data-id="{{item.id}}" data-action="confirm" catchtap="ack">确认接单</view>
+        </block>
+        <block wx:if="{{item.canReopen}}">
+          <view class="btn sm" data-id="{{item.id}}" catchtap="reopen">撤回拒单</view>
+        </block>
+        <block wx:if="{{item.canShip}}">
+          <view class="btn sm" data-id="{{item.id}}" catchtap="ship">登记发货</view>
+        </block>
+        <block wx:if="{{item.canSettle}}">
+          <view class="btn sm" data-id="{{item.id}}" catchtap="goSettle">确认结算金额</view>
+        </block>
+      </view>
+    </view>
+
+    <view class="empty" wx:if="{{!orders.length}}">
+      <view class="empty-icon">🚚</view>
+      <view class="empty-text">{{emptyHint}}</view>
+    </view>
+  </block>
+
+  <view class="empty" wx:else>
+    <view class="empty-icon">🔐</view>
+    <view class="empty-text">当前身份（{{me.name}}）不是供应商</view>
+    <view class="tiny muted" style="margin:12rpx 0 24rpx">切换为「运营物资供应商」或「广告印刷供应商」查看接单与发货</view>
+    <view class="btn ghost sm" style="width:280rpx" bindtap="goIdentity">切换身份</view>
+  </view>
+
+  <tabbar active="supplier" />
+</view>

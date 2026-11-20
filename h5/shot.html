@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  html,body{margin:0;background:#dfe7f0}
+  /* 无头 Chrome 最小窗口 500px：用 390px 画框 + 左移补偿，截图后居中裁剪正好是 390 宽 */
+  body{padding-left:55px}
+  iframe{display:block;width:390px;height:844px;border:0;background:#fff}
+</style>
+<iframe id="f"></iframe>
+<script>
+var p = new URLSearchParams(location.search);
+document.getElementById('f').src = p.get('u') || '/index.html';
+document.getElementById('f').style.height = (p.get('h') || 844) + 'px';
+</script>

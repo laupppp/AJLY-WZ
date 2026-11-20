@@ -1,0 +1,53 @@
+<view class="page">
+  <view class="head">
+    <view class="head-title">{{listTitle}}</view>
+    <view class="head-sub">{{me.name}} · 共 {{orders.length}} 单</view>
+    <view class="search">
+      <text class="search-icon">🔍</text>
+      <input class="search-input" placeholder="搜索订单号 / 门店 / 部门" placeholder-class="placeholder"
+             value="{{keyword}}" bindinput="onKeyword" />
+    </view>
+  </view>
+
+  <view class="draft-entry" wx:if="{{draftCount}}" bindtap="goDrafts">
+    🗂 草稿箱有 {{draftCount}} 份未提交的采购草稿 ›
+  </view>
+
+  <view class="notice warn" wx:if="{{slaOnly}}">
+    仅显示审批 / 接单超时预警订单 · <text style="text-decoration:underline" bindtap="clearSla">查看全部</text>
+  </view>
+
+  <scroll-view scroll-x enable-flex class="chips" style="padding-top:16rpx">
+    <view class="chip {{active === item.key ? 'on' : ''}}" wx:for="{{filters}}" wx:key="key"
+          data-key="{{item.key}}" bindtap="onFilter">{{item.label}} {{item.count}}</view>
+  </scroll-view>
+
+  <view class="order-card accent accent-{{item.statusCls}}" wx:for="{{orders}}" wx:key="id" data-id="{{item.id}}" bindtap="gotoDetail">
+    <view class="between">
+      <view class="order-id">{{item.id}}</view>
+      <view class="pill {{item.statusCls}}">{{item.statusLabel}}</view>
+    </view>
+    <view class="order-store">
+      {{item.owner}}
+      <text class="tag-dept" wx:if="{{item.isDept}}">部门采购</text>
+    </view>
+    <view class="order-items">{{item.itemText}}</view>
+    <view class="between order-foot">
+      <view class="order-time">{{item.created}}</view>
+      <view class="money">¥{{item.totalText}}</view>
+    </view>
+    <view class="sla {{item.slaLevel}}" wx:if="{{item.slaText}}">⏱ {{item.slaText}}</view>
+    <view class="issue-line" wx:if="{{item.issueText}}">⚠ 供应商反馈无法接单 · {{item.issueText}}</view>
+    <view class="order-actions" wx:if="{{item.canCancel || item.canReorder}}">
+      <view class="btn sm danger" wx:if="{{item.canCancel}}" data-id="{{item.id}}" catchtap="cancel">撤销申请</view>
+      <view class="btn sm ghost" wx:if="{{item.canReorder}}" data-id="{{item.id}}" catchtap="reorder">再次下单</view>
+    </view>
+  </view>
+
+  <view class="empty" wx:if="{{!orders.length}}">
+    <view class="empty-icon">📋</view>
+    <view class="empty-text">{{emptyText}}</view>
+  </view>
+
+  <tabbar active="orders" />
+</view>

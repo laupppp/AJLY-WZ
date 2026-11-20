@@ -1,0 +1,77 @@
+/* 结算共同确认 */
+/* 顶部订单信息（与订单详情头部保持一致） */
+.head {
+  background: linear-gradient(140deg, #183654, #2966a5);
+  color: #fff; padding: 30rpx 32rpx 36rpx; border-radius: 0 0 30rpx 30rpx;
+}
+.head-id { font-size: 34rpx; font-weight: 700; letter-spacing: 1rpx; }
+.head-id-row { display: flex; align-items: center; }
+.copy-chip {
+  font-size: 19rpx; color: #d5e4f2; margin-left: 14rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.32); border-radius: 999rpx;
+  padding: 2rpx 14rpx;
+}
+.head-amount { font-size: 48rpx; font-weight: 700; margin-top: 12rpx; }
+.head-meta { font-size: 23rpx; color: #c3d5e6; margin-top: 6rpx; }
+
+/* 键值行 */
+.kv { display: flex; padding: 10rpx 0; font-size: 25rpx; }
+.kv .k { width: 150rpx; color: #718299; flex-shrink: 0; }
+.kv .v { flex: 1; color: #24354a; text-align: right; }
+
+.line { padding: 14rpx 0; border-bottom: 1rpx solid #f2f6fa; }
+.line:last-of-type { border-bottom: 0; }
+.line-name { font-size: 26rpx; color: #183654; font-weight: 600; }
+.line-sub { font-size: 21rpx; color: #8a9bad; margin-top: 4rpx; }
+.line-amt { font-size: 27rpx; font-weight: 700; color: #183654; font-variant-numeric: tabular-nums; }
+.line-foot { display: flex; justify-content: space-between; margin-top: 6rpx; }
+
+.sum-line {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 16rpx; padding-top: 16rpx;
+  border-top: 1rpx dashed #e2ebf5;
+}
+.sl-k { font-size: 24rpx; color: #5d7186; }
+.sl-v { font-size: 30rpx; font-weight: 700; color: #183654; font-variant-numeric: tabular-nums; }
+.strong-line .sl-v { font-size: 36rpx; color: #1f5d96; }
+
+/* 金额输入 */
+.amount-box {
+  display: flex; align-items: baseline; gap: 8rpx;
+  padding: 18rpx 20rpx; margin-bottom: 12rpx;
+  background: #f8fbfe; border: 1rpx solid #dbe7f3; border-radius: 16rpx;
+}
+.ab-cur { font-size: 30rpx; color: #5d7186; }
+.ab-input {
+  flex: 1; font-size: 40rpx; font-weight: 700; color: #183654;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 差异提示 */
+.diff-line {
+  padding: 12rpx 16rpx; border-radius: 12rpx;
+  font-size: 22rpx; margin-bottom: 8rpx;
+}
+.diff-line.ok { background: #eef7f1; color: #2f7d55; }
+.diff-line.warn { background: #fff7e8; color: #9a7126; }
+.diff-line.bad { background: #fdeeeb; color: #a4453c; }
+
+.btn-row { display: flex; gap: 16rpx; }
+.btn-row .btn { flex: 1; text-align: center; }
+.btn.block { width: 100%; text-align: center; }
+.btn.disabled { opacity: .5; }
+
+.link-row {
+  margin: 8rpx 24rpx 0; padding: 22rpx 0;
+  text-align: center; font-size: 23rpx; color: #4f6d8f;
+}
+.page-pad { height: 40rpx; }
+
+/* 历史异议 */
+.sd-row {
+  margin-top: 12rpx; padding: 14rpx 16rpx;
+  background: #fdf1ef; border: 1rpx solid #f4d9d4; border-radius: 12rpx;
+}
+.sd-head { font-size: 21rpx; color: #a4453c; font-weight: 600; }
+.sd-text { font-size: 23rpx; color: #4c6280; line-height: 1.55; margin-top: 4rpx; }
+.sd-at { font-size: 19rpx; color: #9aa9b8; margin-top: 4rpx; }

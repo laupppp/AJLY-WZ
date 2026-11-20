@@ -1,0 +1,151 @@
+<view class="page">
+  <!-- 无权限 -->
+  <block wx:if="{{denied}}">
+    <view class="head">
+      <view class="head-title">收货验收</view>
+      <view class="head-sub">{{me.name}} · {{me.role === 'supplier' ? '供应商' : '当前身份'}}不参与验收</view>
+    </view>
+    <view class="empty">
+      <view class="empty-icon">🔒</view>
+      <view class="empty-text">当前身份没有收货验收权限</view>
+      <view class="tiny muted" style="margin-top:10rpx">验收由收货门店、采购部门或运营管理部完成</view>
+    </view>
+  </block>
+
+  <!-- 列表模式 -->
+  <block wx:elif="{{mode === 'list'}}">
+    <view class="head">
+      <view class="head-title">收货验收</view>
+      <view class="head-sub">{{me.name}} · 待验收 {{orderList.length}} 单</view>
+    </view>
+
+    <view class="acc-card" wx:for="{{orderList}}" wx:key="id">
+      <view class="between">
+        <view class="acc-id">{{item.id}}</view>
+        <view class="pill {{item.statusCls}}">{{item.statusLabel}}</view>
+      </view>
+      <view class="acc-store">{{item.store}}</view>
+      <view class="between acc-foot">
+        <view class="tiny muted">{{item.itemCount}} 种商品 · 待验收批次 {{item.pending}}</view>
+        <view class="money">¥{{item.totalText}}</view>
+      </view>
+      <view class="acc-actions">
+        <view class="btn sm {{item.canAccept ? '' : 'disabled'}}" data-id="{{item.id}}" bindtap="openOrder">开始验收</view>
+      </view>
+    </view>
+
+    <view class="empty" wx:if="{{!orderList.length}}">
+      <view class="empty-icon">📷</view>
+      <view class="empty-text">当前没有待验收的订单</view>
+      <view class="tiny muted" style="margin-top:10rpx">供应商发货后可在此拍照验收</view>
+    </view>
+  </block>
+
+  <!-- 验收表单 -->
+  <block wx:else>
+    <view class="head">
+      <view class="head-title">{{order.id}}</view>
+      <view class="head-sub">{{order.store}} · ¥{{order.totalText}}</view>
+      <view class="head-meta">收货：{{order.receiver}} · {{order.address}}</view>
+      <view class="back-link" bindtap="back">‹ 返回验收列表</view>
+    </view>
+
+    <view class="card">
+      <view class="card-head"><view class="card-title">选择配送批次</view></view>
+      <view class="field">
+        <text class="field-label">供应商</text>
+        <picker range="{{supplierOptions}}" range-key="name" value="{{supplierIndex}}" bindchange="onSupplier">
+          <view class="picker-box">
+            <text>{{supplierName || '请选择供应商'}}</text>
+            <text class="muted">▾</text>
+          </view>
+        </picker>
+      </view>
+      <view class="field" style="margin-bottom:0">
+        <text class="field-label">配送批次</text>
+        <picker range="{{batchOptions}}" range-key="label" value="{{batchIndex}}" bindchange="onBatch">
+          <view class="picker-box">
+            <text>{{batchLabel || '请选择批次'}}</text>
+            <text class="muted">▾</text>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">本次验收数量</view>
+        <view class="card-sub">按实际到货填写</view>
+      </view>
+      <view class="line-item" wx:for="{{items}}" wx:key="id">
+        <view class="between">
+          <view class="flex1">
+            <view class="line-name">{{item.name}}</view>
+            <view class="line-sub">{{item.spec}}</view>
+            <view class="tiny muted">本批待验收 {{item.remaining}}{{item.unit}}</view>
+          </view>
+          <view class="stepper" wx:if="{{result === 'pass'}}">
+            <view class="btn-step" data-id="{{item.id}}" data-delta="-1" bindtap="onQty">−</view>
+            <view class="num">{{item.thisQty}}</view>
+            <view class="btn-step add" data-id="{{item.id}}" data-delta="1" bindtap="onQty">＋</view>
+          </view>
+        </view>
+      </view>
+      <view class="empty" style="padding:30rpx 0" wx:if="{{!items.length}}">
+        <view class="empty-text">该批次已全部验收</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-head"><view class="card-title">验收结论</view></view>
+      <view class="result-row">
+        <view class="result {{result === 'pass' ? 'on good' : ''}}" data-value="pass" bindtap="setResult">
+          <view class="result-title">✓ 验收合格</view>
+          <view class="result-desc">规格数量外观一致，计入已验收</view>
+        </view>
+        <view class="result {{result === 'issue' ? 'on bad' : ''}}" data-value="issue" bindtap="setResult">
+          <view class="result-title">! 异常反馈</view>
+          <view class="result-desc">破损、短缺或错发，不计入验收</view>
+        </view>
+      </view>
+
+      <view class="check-row" wx:if="{{result === 'pass'}}" bindtap="toggleSpec">
+        <view class="checkbox {{specChecked ? 'on' : ''}}">{{specChecked ? '✓' : ''}}</view>
+        <view class="check-text">已核对规格、数量及外观</view>
+      </view>
+      <view class="check-row" wx:if="{{result === 'pass' && needInstall}}" bindtap="toggleInstall">
+        <view class="checkbox {{installChecked ? 'on' : ''}}">{{installChecked ? '✓' : ''}}</view>
+        <view class="check-text">安装类物料已确认安装位置、牢固程度与完工效果</view>
+      </view>
+
+      <view class="field mt16" style="margin-bottom:0">
+        <text class="field-label">{{result === 'pass' ? '验收备注' : '异常情况'}}<text class="req" wx:if="{{result === 'issue'}}">*</text></text>
+        <textarea class="textarea" value="{{note}}" bindinput="onNote" maxlength="300"
+                  placeholder="{{result === 'pass' ? '选填，如卸货位置、包装情况' : '请描述破损、短缺或错发的具体情况（至少4个字）'}}" />
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">现场照片<text class="req">*</text></view>
+        <view class="card-sub">支持微信拍照或相册</view>
+      </view>
+      <view class="photo-box" wx:if="{{photoPath}}">
+        <image class="photo-img" src="{{photoPath}}" mode="aspectFill" bindtap="previewPhoto" />
+        <view class="photo-del" bindtap="removePhoto">重拍</view>
+      </view>
+      <view class="photo-add" wx:else bindtap="choosePhoto">
+        <view class="photo-add-icon">📷</view>
+        <view class="photo-add-text">拍照 / 从相册选择</view>
+      </view>
+    </view>
+
+    <view class="bottom-bar">
+      <view class="total">
+        <view class="total-num">{{result === 'pass' ? '合格验收' : '异常上报'}}</view>
+        <view class="tiny muted">{{photoPath ? '已留证' : '待拍照'}}</view>
+      </view>
+      <view class="btn {{submitting ? 'disabled' : ''}}" bindtap="submit">{{submitting ? '提交中…' : '提交验收'}}</view>
+    </view>
+  </block>
+</view>

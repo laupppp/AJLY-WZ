@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "待办审批",
+  "usingComponents": {
+    "tabbar": "/components/tabbar/tabbar"
+  },
+  "enablePullDownRefresh": true
+}

@@ -1,0 +1,51 @@
+.head {
+  background: linear-gradient(140deg, #183654, #2966a5);
+  color: #fff; padding: 28rpx 32rpx 30rpx; border-radius: 0 0 30rpx 30rpx;
+}
+.head-title { font-size: 34rpx; font-weight: 700; }
+.head-sub { font-size: 22rpx; color: #b9cde2; margin-top: 6rpx; }
+.search {
+  display: flex; align-items: center; margin-top: 20rpx;
+  background: rgba(255, 255, 255, 0.14); border-radius: 16rpx; padding: 0 20rpx; height: 72rpx;
+}
+.search-icon { font-size: 24rpx; opacity: .8; margin-right: 10rpx; }
+.search-input { flex: 1; font-size: 25rpx; color: #fff; }
+.search-input .placeholder { color: #b9cde2; }
+
+.draft-entry {
+  margin: 20rpx 24rpx 0; padding: 20rpx 24rpx; border-radius: 16rpx;
+  background: #fff8ec; color: #96601a; font-size: 24rpx;
+}
+
+.order-card {
+  background: #fff; border: 1rpx solid #e8eef6; border-radius: 22rpx;
+  padding: 24rpx; margin: 0 24rpx 18rpx;
+  box-shadow: 0 4rpx 16rpx rgba(20, 45, 70, .04);
+}
+.order-id { font-size: 28rpx; font-weight: 700; color: #183654; letter-spacing: .5rpx; }
+.order-store { font-size: 25rpx; color: #34495f; margin-top: 12rpx; }
+.tag-dept {
+  font-size: 18rpx; color: #6b4a99; background: #f1ebfb; border-radius: 6rpx;
+  padding: 2rpx 8rpx; margin-left: 10rpx;
+}
+.order-items { font-size: 23rpx; color: #718299; margin-top: 8rpx; }
+.order-foot { margin-top: 16rpx; padding-top: 16rpx; border-top: 1rpx dashed #eef2f8; }
+.order-time { font-size: 21rpx; color: #9aa9ba; }
+.sla { margin-top: 12rpx; font-size: 21rpx; color: #9a6216; }
+.sla.overdue { color: #b0413a; font-weight: 600; }
+.issue-line {
+  margin-top: 10rpx; font-size: 21rpx; line-height: 1.5;
+  color: #a4453c; background: #fdf0ee; border-radius: 10rpx; padding: 10rpx 14rpx;
+}
+.order-actions { display: flex; justify-content: flex-end; gap: 14rpx; margin-top: 16rpx; }
+
+/* 筛选标签：横向滚动（scroll-view 内用 inline-flex，避免被挤成竖排换行） */
+.chips {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+  min-width: 100%;
+}
+.chips .chip { flex: 0 0 auto; white-space: nowrap; }

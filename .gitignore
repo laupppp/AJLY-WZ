@@ -1,0 +1,22 @@
+# 忽略：系统与编辑器
+.DS_Store
+Thumbs.db
+*.swp
+
+# 忽略：依赖与日志
+node_modules/
+*.log
+
+# 忽略：本工具的项目内记忆与缓存
+.workbuddy/
+*.genie
+
+# 忽略：服务端版本的数据库、备份与旧版本文档（本仓库只放 H5 + 小程序共用逻辑）
+data/
+data-before-*/
+public/
+server.js
+server-*-backup.js
+README_*.txt
+README-V*.txt
+*.sqlite

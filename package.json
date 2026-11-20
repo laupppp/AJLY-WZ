@@ -1,0 +1,17 @@
+{
+  "name": "anju-purchase",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "h5:build": "node h5/build-biz.js",
+    "h5:watch": "node h5/build-biz.js --watch",
+    "h5:check": "node h5/build-biz.js --check",
+    "h5:standalone": "node h5/build-standalone.js",
+    "h5:serve": "cd h5 && python3 -m http.server 8899",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

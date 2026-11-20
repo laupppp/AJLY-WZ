@@ -1,0 +1,70 @@
+<view class="page">
+  <view class="hero">
+    <view class="hero-title">门店费用预算</view>
+    <view class="hero-sub">额度 = 管理房间数 × 科目系数，可对单店直接定额</view>
+    <view class="hero-foot">
+      <text>机动（预留）预算余额 ¥{{flexText}}</text>
+      <text>{{list.length}} 家门店</text>
+    </view>
+  </view>
+
+  <view class="search">
+    <input class="search-input" value="{{keyword}}" bindinput="onSearch" placeholder="搜索门店名称" confirm-type="search" />
+  </view>
+
+  <view class="card" wx:for="{{visible}}" wx:key="store">
+    <view class="row" data-store="{{item.store}}" bindtap="toggle">
+      <view class="flex1">
+        <view class="store-name">{{item.store}}</view>
+        <view class="store-sub">{{item.rooms}} 间房 · 合计 ¥{{item.totalText}} · 已用 ¥{{item.usedText}}（{{item.pct}}%）</view>
+      </view>
+      <view class="store-go">{{editing === item.store ? '收起' : '调整'}} ›</view>
+    </view>
+
+    <view class="items">
+      <view class="item-line" wx:for="{{item.items}}" wx:for-item="it" wx:key="key">
+        <text class="item-name">{{it.name}}</text>
+        <text class="item-basis">{{it.basisText}}</text>
+        <text class="item-amt">¥{{it.budgetText}}</text>
+      </view>
+    </view>
+
+    <view class="editor" wx:if="{{editing === item.store}}">
+      <view class="field">
+        <text class="field-label">管理房间数</text>
+        <input class="input" type="number" value="{{form.rooms}}" data-key="rooms" bindinput="onForm" placeholder="如 1000" />
+      </view>
+
+      <view class="edit-item" wx:for="{{form.items}}" wx:for-item="fi" wx:key="key">
+        <view class="edit-item-head">
+          <text>{{fi.name}}</text>
+          <text class="edit-item-amt">当前 ¥{{fi.budgetText}}<text class="edit-item-adj" wx:if="{{fi.adjustText}}">（含追加 {{fi.adjustText}}）</text></text>
+        </view>
+        <view class="edit-row">
+          <view class="edit-cell">
+            <text class="edit-label">系数（元/间）</text>
+            <input class="input sm" type="digit" value="{{fi.coef}}" data-key="coef-{{fi.key}}" bindinput="onForm" placeholder="10" />
+          </view>
+          <view class="edit-cell">
+            <text class="edit-label">直接定额（留空按公式）</text>
+            <input class="input sm" type="digit" value="{{fi.override}}" data-key="override-{{fi.key}}" bindinput="onForm" placeholder="不设置" />
+          </view>
+        </view>
+      </view>
+
+      <view class="edit-actions">
+        <view class="btn ghost sm" data-store="{{item.store}}" bindtap="resetStore">恢复默认</view>
+        <view class="btn sm" data-store="{{item.store}}" bindtap="save">保存</view>
+      </view>
+      <view class="edit-note">保存后立即生效：门店下单试算、预算核定缺口、看板统计都会按新额度计算。历史订单不追溯。</view>
+    </view>
+  </view>
+
+  <view class="more" wx:if="{{visible.length < list.length}}" bindtap="more">显示更多门店（{{visible.length}}/{{list.length}}）</view>
+
+  <view class="foot-note">
+    三项费用均按「管理房间数 × 系数」计提，默认 1000 间房 × 10 元/间 = 每科目 ¥10,000。<br />
+    机动池追加与门店间调剂不计入基数，可在「统一对账 → 预算占用」中查看明细。
+  </view>
+
+</view>

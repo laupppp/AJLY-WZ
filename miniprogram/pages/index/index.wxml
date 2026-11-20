@@ -1,0 +1,95 @@
+<view class="page">
+  <view class="home-head">
+    <view class="hh-top">
+      <view class="brand">
+        <view class="brand-mark">安</view>
+        <view class="brand-text">
+          <view class="brand-name">安居乐寓</view>
+          <view class="brand-sub">物资采购管理系统 V1.24</view>
+        </view>
+      </view>
+      <view class="hh-date">{{dateText}}</view>
+    </view>
+
+    <view class="me-row" bindtap="goMe">
+      <view class="me-avatar" style="background:{{toneBg}};color:{{toneFg}}">{{avatarText}}</view>
+      <view class="me-main">
+        <view class="me-name-line">
+          <text class="me-name">{{me.name}}</text>
+          <text class="me-tag" wx:if="{{roleTag}}">{{roleTag}}</text>
+        </view>
+        <view class="me-scope" wx:if="{{scopeText}}">{{scopeText}}</view>
+      </view>
+      <view class="me-switch">{{demoMode ? '切换身份' : '我的'}}<text class="me-switch-arrow">›</text></view>
+    </view>
+  </view>
+
+  <view class="quick-card">
+    <view class="quick" wx:for="{{quick}}" wx:key="key" data-url="{{item.url}}" bindtap="go">
+      <view class="quick-icon qi-{{item.tone}}">
+        <text class="quick-glyph">{{item.icon}}</text>
+        <view class="badge-dot" wx:if="{{item.badge}}">{{item.badge}}</view>
+      </view>
+      <view class="quick-label">{{item.label}}</view>
+    </view>
+  </view>
+
+  <view class="alert-line {{alertLevel}}" wx:if="{{alertText}}" bindtap="goAlerts">
+    <view class="alert-ico">!</view>
+    <text class="alert-text flex1">{{alertText}}</text>
+    <text class="alert-go">查看<text class="alert-go-arrow">›</text></text>
+  </view>
+
+  <view class="block">
+    <view class="block-head">
+      <text class="block-title">待我处理</text>
+      <text class="block-link" bindtap="goOrders">全部订单 ›</text>
+    </view>
+    <view class="task" wx:for="{{tasks}}" wx:key="key" data-url="{{item.url}}" bindtap="go">
+      <view class="task-bar {{item.cls}}"></view>
+      <view class="flex1">
+        <view class="task-title">{{item.title}}</view>
+        <view class="task-sub">{{item.sub}}</view>
+      </view>
+      <view class="pill {{item.cls}}" wx:if="{{item.pill}}">{{item.pill}}</view>
+      <view class="task-arrow" wx:else>›</view>
+    </view>
+  </view>
+
+  <view class="block">
+    <view class="block-head">
+      <text class="block-title">数据概览</text>
+      <text class="block-note">{{roleDuty}}</text>
+    </view>
+    <view class="stat-row">
+      <view class="stat" wx:for="{{stats}}" wx:key="label">
+        <view class="stat-num">{{item.num}}</view>
+        <view class="stat-label">{{item.label}}</view>
+      </view>
+    </view>
+
+    <view class="budget" wx:if="{{budgetBar}}">
+      <view class="between">
+        <text class="budget-title">{{budgetBar.title}}</text>
+        <text class="budget-pct {{budgetBar.level}}">{{budgetBar.pct}}%</text>
+      </view>
+      <view class="budget-bar">
+        <view class="budget-fill {{budgetBar.level}}" style="width:{{budgetBar.pct}}%"></view>
+      </view>
+      <view class="budget-sub">{{budgetBar.sub}}</view>
+      <view class="budget-items" wx:if="{{budgetBar.items.length}}">
+        <view class="budget-item" wx:for="{{budgetBar.items}}" wx:key="key">
+          <text class="budget-item-name">{{item.name}}</text>
+          <view class="budget-item-bar"><view class="budget-item-fill {{item.level}}" style="width:{{item.pct}}%"></view></view>
+          <text class="budget-item-pct {{item.level}}">{{item.pct}}%</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="foot-note" wx:if="{{demoMode}}">
+    演示数据：商品价格、预算、人员与供应商均为虚构，不具备真实业务效力。<br />订单与验收记录保存在本机，换机或清缓存会恢复初始演示数据。
+  </view>
+
+  <tabbar active="home" />
+</view>

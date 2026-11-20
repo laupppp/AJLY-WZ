@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>fixture</title></head>
+<body>
+<script src="js/config.js"></script>
+<script src="js/biz.js"></script>
+<script>
+// 本地联调夹具：造一笔 3 万的订单停在中台预算核定，用来验证缺口处理
+(function () {
+  const CAT = {};
+  BIZ.catalog.CATALOG.forEach(function (p) { CAT[p.id] = p; });
+  const st = JSON.parse(JSON.stringify(BIZ.seed.SEED_STATE));
+  st.schema = 3;   // 与 js/store.js 的 SCHEMA 保持一致，否则会被当成旧缓存重建
+
+  const lines = [{ id: 'OP-001', qty: 200 }, { id: 'OP-003', qty: 85 }];
+  const items = lines.map(function (l) {
+    const p = CAT[l.id];
+    return {
+      id: p.id, name: p.name, spec: p.spec, unit: p.unit, price: p.price,
+      supplier: p.supplier, category: p.category, demoOnly: p.demoOnly,
+      qty: l.qty, accepted: 0, reconciled: 0
+    };
+  });
+  const total = items.reduce(function (s, x) { return s + x.price * x.qty; }, 0);
+  const now = new Date().toISOString();
+
+  const scenario = new URLSearchParams(location.search).get('s') || 'approval';
+  const base = {
+    id: 'SQ-9001', purchaseType: 'store', store: '安居瑞龙苑店', zone: '第一战区',
+    manager: '测试店长 A', submittedBy: 'TEST-STORE-A',
+    items: items, total: total, tier: 'central',
+    overPending: true, overAmount: 27082,
+    regionApproved: true, centralApproved: false, budgetApproved: false,
+    status: scenario === 'supplier' ? 'supplier' : 'budget-central',
+    purpose: '门店开业活动物资', address: '安居瑞龙苑店 收货区（演示地址）',
+    receiver: '测试店长 A', due: '2026-11-24', note: '开业活动用，请尽快',
+    created: '2026/11/20 09:05', createdAt: now, stageStartedAt: now,
+    supplierSentAt: null, supplierRecords: { '运营物资供应商（演示）': { status: 'pending', delivered: false } },
+    budgetApplied: false
+  };
+  if (scenario === 'supplier') { base.regionApproved = true; base.centralApproved = true; base.budgetApproved = true; base.overPending = false; base.supplierSentAt = now; }
+  st.orders.unshift(base);
+  st.seq = 9001;
+
+  localStorage.setItem((APP_CONFIG.prefix || 'anju_h5_') + 'state', JSON.stringify(st));
+  localStorage.setItem((APP_CONFIG.prefix || 'anju_h5_') + 'identity', 'TEST-CENTRAL');
+  location.replace(scenario === 'supplier' ? '/?as=TEST-SUPPLIER-1#/supplier' : '/?as=TEST-CENTRAL#/approvals');
+})();
+</script>
+</body></html>

@@ -1,0 +1,163 @@
+<view class="page">
+  <view class="ctx-bar">
+    <view class="flex1">
+      <view class="ctx-label">{{isDept ? '采购部门' : '收货门店'}}</view>
+      <picker wx:if="{{isStore}}" mode="selector" range="{{stores}}" value="{{storeIndex}}" bindchange="onStoreChange">
+        <view class="ctx-value">{{contextName}} <text class="caret">▾</text></view>
+      </picker>
+      <view class="ctx-value" wx:else>{{contextName || '当前身份不可下单'}}</view>
+    </view>
+    <view class="ctx-right">
+      <view class="ctx-amount">¥{{cartAmount}}</view>
+      <view class="ctx-items">已选 {{cartCount}} 件</view>
+    </view>
+  </view>
+
+  <view class="notice" wx:if="{{hint}}">{{hint}}</view>
+
+  <view class="search-wrap">
+    <view class="search">
+      <text class="search-icon">🔍</text>
+      <input class="search-input" placeholder="搜索商品 / 规格 / 供应商" placeholder-class="placeholder"
+             value="{{keyword}}" bindinput="onKeyword" confirm-type="search" />
+      <text class="search-clear" wx:if="{{keyword}}" bindtap="clearKeyword">✕</text>
+    </view>
+  </view>
+
+  <!-- 左：竖排两级目录（大类 + 二级细分） 右：商品列表 -->
+  <view class="shop">
+    <scroll-view scroll-y class="rail" show-scrollbar="{{false}}">
+      <view class="rail-item {{activeCat === 'all' ? 'on' : ''}}" data-key="all" bindtap="onCat">
+        <text class="rail-label">全部物资</text>
+        <text class="rail-n">{{nav[0].count}}</text>
+      </view>
+
+      <block wx:for="{{nav}}" wx:key="key">
+        <block wx:if="{{item.key !== 'all'}}">
+          <view class="rail-item {{activeCat === item.key ? 'on' : ''}}" data-key="{{item.key}}" bindtap="onCat">
+            <text class="rail-label">{{item.short}}</text>
+            <text class="rail-n">{{item.count}}</text>
+            <text class="rail-arrow" wx:if="{{item.subs.length}}">{{expandedCat === item.key ? '▾' : '▸'}}</text>
+          </view>
+          <block wx:if="{{expandedCat === item.key && item.subs.length}}">
+            <view class="rail-sub {{activeSub === sub.key ? 'on' : ''}}" wx:for="{{item.subs}}" wx:for-item="sub"
+                  wx:key="key" data-key="{{sub.key}}" data-cat="{{item.key}}" bindtap="onSub">
+              <text class="rail-sub-label">{{sub.short}}</text>
+              <text class="rail-sub-n">{{sub.count}}</text>
+            </view>
+            <view class="rail-fold" data-key="{{item.key}}" bindtap="onFold">收起 ⌃</view>
+          </block>
+        </block>
+      </block>
+
+      <view class="rail-pad"></view>
+    </scroll-view>
+
+    <scroll-view scroll-y class="goods" id="goods" scroll-into-view="{{goodsTop}}"
+                 refresher-enabled="{{true}}" refresher-triggered="{{refreshing}}"
+                 bindrefresherrefresh="onRefresherRefresh"
+                 lower-threshold="160" bindscrolltolower="onGoodsBottom"
+                 show-scrollbar="{{false}}">
+      <view class="goods-inner {{canBuy ? 'has-bar' : ''}}">
+        <view id="g-top"></view>
+
+        <view class="freq" wx:if="{{frequent.length && activeCat === 'all' && !keyword}}">
+          <view class="freq-head">
+            <text class="freq-title">常买清单</text>
+            <text class="freq-note">按历史下单排序，点一下加 1 件</text>
+          </view>
+          <scroll-view scroll-x class="freq-scroll">
+            <view class="freq-card" wx:for="{{frequent}}" wx:key="id" data-id="{{item.id}}" bindtap="addItem">
+              <view class="freq-name">{{item.name}}</view>
+              <view class="freq-price">¥{{item.priceText}}<text class="freq-unit">/{{item.unit}}</text></view>
+              <view class="freq-add {{item.qty ? 'on' : ''}}">{{item.qty ? '已选 ' + item.qty + ' · 再加' : '＋ 加入'}}</view>
+            </view>
+          </scroll-view>
+        </view>
+
+        <view class="list-head">
+          <view class="lh-left">
+            <text class="list-title">{{listTitle}}</text>
+            <text class="list-sub" wx:if="{{listSub}}">{{listSub}}</text>
+          </view>
+          <text class="list-count">共 {{totalCount}} 项</text>
+        </view>
+
+        <view class="list">
+          <view class="prod" wx:for="{{list}}" wx:key="id">
+            <view class="prod-ico">{{item.icon}}</view>
+            <view class="flex1">
+              <view class="prod-name">
+                {{item.name}}
+                <text class="tag-demo" wx:if="{{item.demoOnly}}">演示价</text>
+              </view>
+              <view class="prod-spec">{{item.spec || '规格以合同为准'}}</view>
+              <view class="prod-sup">{{item.supplier}}</view>
+              <view class="prod-foot">
+                <view class="prod-price">¥{{item.priceText}}<text class="prod-unit">/{{item.unit}}</text></view>
+                <view class="stepper" wx:if="{{canBuy}}">
+                  <view class="btn-step" wx:if="{{item.qty}}" data-id="{{item.id}}" bindtap="minusItem">−</view>
+                  <view class="num" wx:if="{{item.qty}}" data-id="{{item.id}}" bindtap="editQty">{{item.qty}}</view>
+                  <view class="btn-step add" data-id="{{item.id}}" bindtap="addItem">＋</view>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="empty" wx:if="{{!list.length}}">
+          <view class="empty-icon">🔍</view>
+          <view class="empty-text">没有匹配的商品，换个关键词试试</view>
+        </view>
+
+        <view class="more" wx:if="{{hasMore}}" bindtap="loadMore">加载更多（共 {{totalCount}} 项）</view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="bottom-bar above-tab" wx:if="{{canBuy}}">
+    <view class="cart-btn" bindtap="toggleCart">
+      <text class="cart-ico">🛒</text>
+      <view class="cart-badge" wx:if="{{cartCount}}">{{cartCount}}</view>
+    </view>
+    <view class="total">
+      <view class="total-num">¥{{cartAmount}}</view>
+      <view class="tiny muted">共 {{cartCount}} 件 · 演示价格</view>
+    </view>
+    <view class="btn sm ghost" bindtap="saveDraftNow">存草稿</view>
+    <view class="btn" bindtap="goCheckout">去结算</view>
+  </view>
+
+  <view class="mask" wx:if="{{showCart}}" bindtap="closeCart"></view>
+  <view class="sheet" wx:if="{{showCart}}">
+    <view class="sheet-head">
+      <view class="card-title">已选商品 {{cartCount}} 件</view>
+      <view class="sheet-clear" bindtap="clearCart">清空</view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="line-item" wx:for="{{cartLines}}" wx:key="id">
+        <view class="between">
+          <view class="flex1">
+            <view class="line-name">{{item.name}}</view>
+            <view class="line-sub">{{item.spec}}</view>
+          </view>
+          <view class="money">{{item.amountText}}</view>
+        </view>
+        <view class="between mt8">
+          <view class="tiny muted">¥{{item.priceText}}/{{item.unit}}</view>
+          <view class="stepper">
+            <view class="btn-step" data-id="{{item.id}}" bindtap="minusItem">−</view>
+            <view class="num" data-id="{{item.id}}" bindtap="editQty">{{item.qty}}</view>
+            <view class="btn-step add" data-id="{{item.id}}" bindtap="addItem">＋</view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn ghost" bindtap="saveDraftNow">保存草稿</view>
+      <view class="btn" bindtap="goCheckout">去结算</view>
+    </view>
+  </view>
+
+  <tabbar active="catalog" />
+</view>

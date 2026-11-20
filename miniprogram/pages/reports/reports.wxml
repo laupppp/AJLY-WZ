@@ -1,0 +1,232 @@
+<view class="page">
+  <view class="head">
+    <view class="head-title">统计看板</view>
+    <view class="head-sub">{{me.name}} · {{role === 'central' ? '运营管理部口径' : (role === 'supplier' ? '供应商对账' : (role === 'region' ? '本战区口径' : (role === 'store' ? '本店口径' : '本部门口径')))}}</view>
+    <view class="head-metrics">
+      <view class="hm"><view class="hm-num">{{totals.requests}}</view><view class="hm-label">申请单数</view></view>
+      <view class="hm"><view class="hm-num">{{totals.activeOrders}}</view><view class="hm-label">有效订单</view></view>
+      <view class="hm"><view class="hm-num">¥{{totals.requestedText}}</view><view class="hm-label">申请金额</view></view>
+    </view>
+  </view>
+
+  <view class="seg" wx:if="{{tabs.length > 1}}">
+    <view class="seg-item {{active === item.key ? 'on' : ''}}" wx:for="{{tabs}}" wx:key="key"
+          data-key="{{item.key}}" bindtap="onTab">{{item.label}}</view>
+  </view>
+
+  <!-- 概览 -->
+  <block wx:if="{{active === 'overview'}}">
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">金额漏斗</view>
+        <view class="card-sub">申请 → 验收 → 对账</view>
+      </view>
+      <view class="funnel" wx:for="{{funnel}}" wx:key="label">
+        <view class="between">
+          <view class="funnel-label">{{item.label}}</view>
+          <view class="funnel-value">¥{{item.text}}</view>
+        </view>
+        <view class="bar"><view class="bar-in {{item.cls}}" style="width:{{item.pct}}%"></view></view>
+      </view>
+      <view class="kv-line">
+        <text class="muted">待对账金额（已验收未对账）</text>
+        <text class="money-red">¥{{totals.unreconciledText}}</text>
+      </view>
+    </view>
+
+    <view class="card" wx:if="{{budgetRows.length}}">
+      <view class="card-head">
+        <view class="card-title">门店预算占用</view>
+        <view class="card-sub">{{role === 'store' ? '本店额度与消耗' : (role === 'region' ? '本战区各门店额度消耗' : '按占用率排序')}}</view>
+      </view>
+      <view class="budget-total" wx:if="{{budgetTotals}}">
+        <view class="between">
+          <view class="line-name">{{role === 'region' ? '战区合计额度' : '已建档门店合计额度'}} ¥{{budgetTotals.budgetText}}</view>
+          <view class="tiny muted">已用 {{budgetTotals.pct}}%</view>
+        </view>
+        <view class="bar mt8"><view class="bar-in {{budgetTotals.pct >= 90 ? 'bad' : (budgetTotals.pct >= 75 ? 'warn' : 'navy')}}" style="width:{{budgetTotals.pct}}%"></view></view>
+        <view class="tiny muted mt8">已用 ¥{{budgetTotals.usedText}}（在途 ¥{{budgetTotals.occupiedText}} · 已验收 ¥{{budgetTotals.spentText}}）· 可用 ¥{{budgetTotals.availableText}} · {{budgetTotals.stores}} 家门店</view>
+      </view>
+      <view class="budget-cats" wx:if="{{budgetItemTotals.length}}">
+        <view class="budget-cat" wx:for="{{budgetItemTotals}}" wx:key="key">
+          <view class="budget-cat-name">{{item.name}}</view>
+          <view class="budget-cat-amt">¥{{item.usedText}}</view>
+          <view class="tiny muted">/ ¥{{item.budgetText}}</view>
+          <view class="bar sm mt8"><view class="bar-in {{item.level}}" style="width:{{item.pct}}%"></view></view>
+        </view>
+      </view>
+      <view class="zone" wx:for="{{budgetRows}}" wx:key="store">
+        <view class="between">
+          <view class="line-name">{{item.store}}</view>
+          <view class="tiny muted">可用 ¥{{item.availableText}}</view>
+        </view>
+        <view class="bar mt8"><view class="bar-in {{item.level}}" style="width:{{item.pct}}%"></view></view>
+        <view class="tiny muted mt8">额度 ¥{{item.budgetText}} · 已用 ¥{{item.usedText}}（在途 ¥{{item.occupiedText}} · 已验收 ¥{{item.spentText}}）· {{item.pct}}%</view>
+        <view class="budget-items">
+          <view class="budget-item" wx:for="{{item.items}}" wx:for-item="it" wx:key="key">
+            <view class="between">
+              <text class="budget-item-name">{{it.name}}</text>
+              <text class="tiny muted">¥{{it.usedText}} / ¥{{it.budgetText}} · {{it.pct}}%</text>
+            </view>
+            <view class="bar sm mt8"><view class="bar-in {{it.level}}" style="width:{{it.pct}}%"></view></view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">按战区 / 归口</view>
+        <view class="card-sub">验收完成率</view>
+      </view>
+      <view class="zone" wx:for="{{byZone}}" wx:key="key">
+        <view class="between">
+          <view class="line-name">{{item.key}}</view>
+          <view class="tiny muted">{{item.orders}} 单 · ¥{{item.requestedText}}</view>
+        </view>
+        <view class="bar mt8"><view class="bar-in blue" style="width:{{item.rate}}%"></view></view>
+        <view class="tiny muted mt8">已验收 ¥{{item.acceptedText}} · 完成率 {{item.rate}}%</view>
+      </view>
+      <view class="empty" style="padding:30rpx 0" wx:if="{{!byZone.length}}">
+        <view class="empty-text">暂无有效订单数据</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">按供应商</view>
+        <view class="card-sub">申请 / 验收 / 对账</view>
+      </view>
+      <view class="sup-row" wx:for="{{bySupplier}}" wx:key="key">
+        <view class="between">
+          <view class="line-name">{{item.key}}</view>
+          <view class="tiny muted">{{item.orders}} 单</view>
+        </view>
+        <view class="sup-grid">
+          <view class="sg"><view class="sg-label">申请</view><view class="sg-num">¥{{item.requestedText}}</view></view>
+          <view class="sg"><view class="sg-label">验收</view><view class="sg-num">¥{{item.acceptedText}}</view></view>
+          <view class="sg"><view class="sg-label">对账</view><view class="sg-num">¥{{item.reconciledText}}</view></view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 战区金额 -->
+  <block wx:if="{{active === 'zone'}}">
+    <view class="notice">门店采购按所属战区汇总；部门采购不计入战区，请在「部门金额」查看。金额含申请、验收、对账三段口径。</view>
+
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">战区合计</view>
+        <view class="card-sub">{{zoneTotals.zones}} 个战区 · {{zoneTotals.stores}} 家门店 · {{zoneTotals.orders}} 单</view>
+      </view>
+      <view class="sup-grid">
+        <view class="sg"><view class="sg-label">申请</view><view class="sg-num">¥{{zoneTotals.requestedText}}</view></view>
+        <view class="sg"><view class="sg-label">验收</view><view class="sg-num">¥{{zoneTotals.acceptedText}}</view></view>
+        <view class="sg"><view class="sg-label">对账</view><view class="sg-num">¥{{zoneTotals.reconciledText}}</view></view>
+      </view>
+    </view>
+
+    <view class="card zone-item" wx:for="{{zones}}" wx:key="key">
+      <view class="between">
+        <view class="line-name">{{item.key}}</view>
+        <view class="tiny muted">{{item.stores}} 家门店 · {{item.orders}} 单</view>
+      </view>
+      <view class="sup-grid mt8">
+        <view class="sg"><view class="sg-label">申请</view><view class="sg-num">¥{{item.requestedText}}</view></view>
+        <view class="sg"><view class="sg-label">已验收</view><view class="sg-num">¥{{item.acceptedText}}</view></view>
+        <view class="sg"><view class="sg-label">待验收</view><view class="sg-num">¥{{item.pendingText}}</view></view>
+      </view>
+      <view class="tiny muted mt8">验收完成率 {{item.rate}}% · 已对账 ¥{{item.reconciledText}}</view>
+      <view class="zone-budget" wx:if="{{item.budgetText !== '0'}}">
+        <view class="between">
+          <text class="tiny muted">战区预算 ¥{{item.budgetText}} · 已用 ¥{{item.usedText}}</text>
+          <text class="tiny {{item.usedPct >= 90 ? 'money-red' : 'muted'}}">{{item.usedPct}}%</text>
+        </view>
+        <view class="bar sm mt8"><view class="bar-in {{item.level}}" style="width:{{item.usedPct}}%"></view></view>
+      </view>
+    </view>
+
+    <view class="empty" wx:if="{{!zones.length}}">
+      <view class="empty-icon">📊</view>
+      <view class="empty-text">暂无门店采购数据</view>
+    </view>
+  </block>
+
+  <!-- 部门金额 -->
+  <block wx:if="{{active === 'dept'}}">
+    <view class="notice">11 个职能部门采购全部由运营管理部统一确认；金额按部门汇总，含验收与对账进度。</view>
+    <view class="card" style="padding:0">
+      <view class="dept dept-head">
+        <view class="d-name">部门</view>
+        <view class="d-num">子单</view>
+        <view class="d-num">申请</view>
+        <view class="d-num">验收</view>
+      </view>
+      <view class="dept" wx:for="{{departments}}" wx:key="department">
+        <view class="d-name">{{item.department}}</view>
+        <view class="d-num">{{item.orders}}</view>
+        <view class="d-num">¥{{item.requestedText}}</view>
+        <view class="d-num">¥{{item.acceptedText}}</view>
+      </view>
+      <view class="dept dept-total">
+        <view class="d-name">合计</view>
+        <view class="d-num">{{deptTotals.orders}}</view>
+        <view class="d-num">¥{{deptTotals.requestedText}}</view>
+        <view class="d-num">¥{{deptTotals.acceptedText}}</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 对账 -->
+  <block wx:if="{{active === 'recon'}}">
+    <view class="card" wx:if="{{canCreate}}">
+      <view class="card-head">
+        <view class="card-title">生成对账单</view>
+        <view class="card-sub">按供应商汇总已验收明细</view>
+      </view>
+      <view class="field">
+        <text class="field-label">供应商</text>
+        <picker range="{{suppliers}}" value="{{supplierIndex}}" bindchange="onSupplier">
+          <view class="picker-box"><text>{{supplierName}}</text><text class="muted">▾</text></view>
+        </picker>
+      </view>
+      <view class="field">
+        <text class="field-label">对账周期</text>
+        <input class="input" value="{{period}}" bindinput="onPeriod" placeholder="如：2026年11月" />
+      </view>
+      <view class="btn" bindtap="createRecon">生成对账单</view>
+    </view>
+
+    <view class="card" wx:if="{{recons.length}}" style="padding:0">
+      <view class="recon" wx:for="{{recons}}" wx:key="id">
+        <view class="between">
+          <view class="recon-id">{{item.id}}</view>
+          <view class="pill {{item.cls}}">{{item.statusText}}</view>
+        </view>
+        <view class="recon-sub">{{item.supplier}} · {{item.period}} · {{item.lineCount}} 条明细</view>
+        <view class="between recon-foot">
+          <view class="tiny muted">生成于 {{item.created}}</view>
+          <view class="money">¥{{item.totalText}}</view>
+        </view>
+        <view class="tiny muted" wx:if="{{item.note}}">差异原因：{{item.note}}</view>
+        <view class="recon-actions" wx:if="{{item.canLock || item.canConfirm || item.canDispute}}">
+          <view class="btn sm gray" wx:if="{{item.canDispute}}" data-id="{{item.id}}" data-action="dispute" bindtap="reconAction">提出差异</view>
+          <view class="btn sm ghost" wx:if="{{item.canConfirm}}" data-id="{{item.id}}" data-action="confirm" bindtap="reconAction">确认对账</view>
+          <view class="btn sm" wx:if="{{item.canLock}}" data-id="{{item.id}}" data-action="lock" bindtap="reconAction">锁定对账单</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty" wx:if="{{!recons.length}}">
+      <view class="empty-icon">🧾</view>
+      <view class="empty-text">{{canCreate ? '还没有对账单，先生成一张' : '暂无待确认的对账单'}}</view>
+    </view>
+
+    <view class="notice" wx:if="{{role !== 'central' && role !== 'supplier'}}">
+      对账由运营管理部统一发起，请切换为「运营管理部（中台）」或供应商身份体验。
+    </view>
+  </block>
+
+  <tabbar active="reports" />
+</view>

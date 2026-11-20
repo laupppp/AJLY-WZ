@@ -1,0 +1,183 @@
+<view class="page" wx:if="{{order}}">
+  <view class="head">
+    <view class="between">
+      <view class="head-id-row" data-text="{{order.id}}" bindtap="copyText">
+        <text class="head-id">{{order.id}}</text>
+        <text class="copy-chip">复制</text>
+      </view>
+      <view class="pill {{order.statusCls}}">{{order.statusLabel}}</view>
+    </view>
+    <view class="head-amount">¥{{order.totalText}}</view>
+    <view class="head-meta">{{order.ownerText}}</view>
+    <view class="sla" wx:if="{{slaText}}">⏱ {{slaText}}</view>
+  </view>
+
+  <view class="notice warn" wx:if="{{order.overPending}}">
+    超出可用预算 ¥{{order.overAmountText}}，需战区 → 运营管理部追加预算后方可继续。
+  </view>
+  <view class="notice" wx:if="{{order.closeReason}}">已关闭：{{order.closeReason}}</view>
+  <view class="notice" wx:if="{{order.groupId}}">部门采购批次号：{{order.groupId}}（同一批次由运营管理部统一确认）</view>
+
+  <view class="card">
+    <view class="card-head"><view class="card-title">采购信息</view></view>
+    <view class="kv"><text class="k">采购类型</text><text class="v">{{order.typeText}}</text></view>
+    <view class="kv"><text class="k">审批层级</text><text class="v">{{order.tierText}}</text></view>
+    <view class="kv"><text class="k">提交人</text><text class="v">{{order.manager}}</text></view>
+    <view class="kv"><text class="k">提交时间</text><text class="v">{{order.created}}</text></view>
+    <view class="kv"><text class="k">采购用途</text><text class="v">{{order.purpose}}</text></view>
+    <view class="kv"><text class="k">收货地址</text><text class="v">{{order.address}}</text></view>
+    <view class="kv"><text class="k">收货人</text><text class="v">{{order.receiver}}</text></view>
+    <view class="kv"><text class="k">期望交付</text><text class="v">{{order.due}}</text></view>
+    <view class="kv" wx:if="{{order.note}}"><text class="k">备注</text><text class="v">{{order.note}}</text></view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">商品明细</view>
+      <view class="card-sub">{{items.length}} 项</view>
+    </view>
+    <view class="item" wx:for="{{items}}" wx:key="id">
+      <view class="between">
+        <view class="flex1">
+          <view class="line-name">{{item.name}}</view>
+          <view class="line-sub">{{item.spec}}</view>
+        </view>
+        <view class="right">
+          <view class="money">¥{{item.amountText}}</view>
+          <view class="tiny muted">¥{{item.priceText}} × {{item.qty}}{{item.unit}}</view>
+        </view>
+      </view>
+      <view class="item-tags">
+        <text class="mini-tag">已交付 {{item.deliveredQty}}</text>
+        <text class="mini-tag good">已验收 {{item.accepted}}</text>
+        <text class="mini-tag dark">已对账 {{item.reconciled}}</text>
+        <text class="mini-tag warn" wx:if="{{item.pendingRecon}}">对账中 {{item.pendingRecon}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-head"><view class="card-title">供应商接单</view></view>
+    <view class="sup" wx:for="{{suppliers}}" wx:key="name">
+      <view class="flex1">
+        <view class="line-name">{{item.name}}</view>
+        <view class="line-sub" wx:if="{{item.confirmedAt}}">接单时间 {{item.confirmedAt}}</view>
+        <view class="line-sub" wx:if="{{item.issue}}">反馈：{{item.issue}}</view>
+      </view>
+      <view class="pill {{item.cls}}">{{item.statusText}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{deliveries.length}}">
+    <view class="card-head">
+      <view class="card-title">配送记录</view>
+      <view class="card-sub">分批发货</view>
+    </view>
+    <view class="delivery" wx:for="{{deliveries}}" wx:key="at">
+      <view class="between">
+        <view class="line-name">第 {{item.batchNo}} 批 · {{item.methodText}}</view>
+        <view class="tiny muted">{{item.at}}</view>
+      </view>
+      <view class="line-sub">{{item.linesText}}</view>
+      <view class="mono" wx:if="{{item.trackingNo}}" data-text="{{item.trackingNo}}" bindtap="copyText">
+        运单号 {{item.trackingNo}}<text wx:if="{{item.carrier}}"> · {{item.carrier}}</text><text class="copy-inline">复制</text>
+      </view>
+      <view class="tiny muted" wx:if="{{item.contact}}">配送安排：{{item.contact}}</view>
+      <view class="tiny muted" wx:if="{{item.estimatedAt}}">预计到达：{{item.estimatedAt}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{accepts.length}}">
+    <view class="card-head">
+      <view class="card-title">验收记录</view>
+      <view class="card-sub">含现场照片</view>
+    </view>
+    <view class="accept" wx:for="{{accepts}}" wx:key="at">
+      <view class="between">
+        <view class="line-name">{{item.result}} · 第 {{item.batchNo}} 批</view>
+        <view class="pill {{item.cls}}">{{item.result}}</view>
+      </view>
+      <view class="line-sub">{{item.at}} · {{item.by}} · {{item.supplier}}</view>
+      <view class="line-sub" wx:if="{{item.linesText}}">{{item.linesText}}</view>
+      <view class="line-sub" wx:if="{{item.note}}">备注：{{item.note}}</view>
+    </view>
+    <view class="photo-row" wx:if="{{photos.length}}">
+      <image class="photo" wx:for="{{photos}}" wx:key="*this" src="{{item}}" mode="aspectFill"
+             data-path="{{item}}" bindtap="previewPhoto" />
+    </view>
+  </view>
+
+  <!-- 结算金额共同确认（门店填报 + 供应商确认） -->
+  <view class="card" wx:if="{{settlement || actions.settleText}}">
+    <view class="card-head">
+      <view class="card-title">结算金额</view>
+      <view class="card-sub">{{settlement ? settlement.statusText : actions.settleText}}</view>
+    </view>
+    <block wx:if="{{settlement}}">
+      <view class="kv"><text class="k">结算金额</text><text class="v money">¥{{settlement.amountText}}</text></view>
+      <view class="kv"><text class="k">实收核算</text><text class="v">¥{{settlement.itemsAmountText}}</text></view>
+      <view class="kv" wx:if="{{settlement.hasDiff}}">
+        <text class="k">金额差异</text>
+        <text class="v money-red">{{settlement.diff < 0 ? '少结' : '多结'}} ¥{{settlement.diffText}}</text>
+      </view>
+      <view class="kv" wx:if="{{settlement.reason}}"><text class="k">差异原因</text><text class="v">{{settlement.reason}}</text></view>
+      <view class="kv"><text class="k">提交人</text><text class="v">{{settlement.byName}} · {{settlement.submittedAt}}</text></view>
+      <view class="kv" wx:if="{{settlement.confirmedAt}}"><text class="k">供应商确认</text><text class="v">{{settlement.confirmedAt}}</text></view>
+      <view class="sd-row" wx:for="{{settlement.disputes}}" wx:key="at">
+        <view class="sd-head">供应商异议 · {{item.by}}</view>
+        <view class="sd-text">{{item.reason}}</view>
+        <view class="sd-at">{{item.at}}</view>
+      </view>
+    </block>
+    <view class="tiny muted" wx:else>验收完成后由门店填写实际结算金额，供应商在自己的账号确认，双方一致后进入统一对账。</view>
+  </view>
+
+  <view class="card">
+    <view class="card-head"><view class="card-title">流程记录</view></view>
+    <view class="timeline">
+      <view class="tl-item" wx:for="{{timeline}}" wx:key="title">
+        <view class="tl-dot {{item.cls}}"></view>
+        <view class="tl-title">{{item.title}}</view>
+        <view class="tl-desc">{{item.desc}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="bottom-bar" wx:if="{{actions.canApprove || actions.canAck || actions.canDeliver || actions.canClose || actions.canAccept || actions.canSettle || actions.canSettleConfirm || actions.canReorder}}">
+    <block wx:if="{{actions.canApprove}}">
+      <view class="btn danger" data-pass="0" bindtap="approve">驳回</view>
+      <view class="btn" data-pass="1" bindtap="approve">通过{{actions.approveStageText}}</view>
+    </block>
+    <block wx:elif="{{actions.canAck}}">
+      <view class="btn danger" data-action="issue" bindtap="ack">无法接单</view>
+      <view class="btn" data-action="confirm" bindtap="ack">确认接单</view>
+    </block>
+    <block wx:elif="{{actions.canDeliver}}">
+      <view class="btn" bindtap="goDeliver">登记发货</view>
+    </block>
+    <block wx:elif="{{actions.canClose}}">
+      <view class="btn ghost" bindtap="reorder">再次下单</view>
+      <view class="btn danger" bindtap="closeStalled">关闭订单</view>
+    </block>
+    <block wx:elif="{{actions.canAccept}}">
+      <view class="btn ghost" bindtap="reorder">再次下单</view>
+      <view class="btn" bindtap="goAccept">去验收</view>
+    </block>
+    <block wx:elif="{{actions.canSettle || actions.canSettleConfirm}}">
+      <view class="btn ghost" bindtap="reorder">再次下单</view>
+      <view class="btn" bindtap="goSettle">{{actions.canSettle ? '确认结算金额' : '确认结算'}}</view>
+    </block>
+    <block wx:elif="{{actions.canAccept}}">
+      <view class="btn ghost" bindtap="reorder">再次下单</view>
+      <view class="btn" bindtap="goAccept">去验收</view>
+    </block>
+    <block wx:else>
+      <view class="btn ghost" bindtap="reorder">按此单再次下单</view>
+    </block>
+  </view>
+</view>
+
+<view class="empty" wx:else>
+  <view class="empty-icon">📄</view>
+  <view class="empty-text">订单不存在或已被删除</view>
+</view>

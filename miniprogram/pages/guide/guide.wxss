@@ -1,0 +1,72 @@
+/* 采购说明 */
+.guide-hero {
+  margin: 0 24rpx 20rpx;
+  padding: 28rpx 26rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(140deg, #183654 0%, #24507c 100%);
+  color: #eaf2fb;
+}
+.gh-title { font-size: 32rpx; font-weight: 700; }
+.gh-sub { font-size: 22rpx; color: #b9cde2; margin-top: 8rpx; line-height: 1.55; }
+
+/* 流程步骤 */
+.step { display: flex; padding: 14rpx 0; border-bottom: 1rpx solid #f2f6fa; }
+.step:last-child { border-bottom: 0; padding-bottom: 0; }
+.step-n {
+  width: 40rpx; height: 40rpx; flex: 0 0 40rpx; margin-right: 16rpx;
+  border-radius: 50%; background: #eaf3fd; color: #1f5d96;
+  font-size: 22rpx; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.step-title { font-size: 26rpx; font-weight: 600; color: #183654; }
+.step-desc { font-size: 22rpx; color: #6b7f94; line-height: 1.55; margin-top: 4rpx; }
+
+/* 审批分级 */
+.tier { display: flex; align-items: flex-start; padding: 16rpx 0; border-bottom: 1rpx solid #f2f6fa; }
+.tier:last-child { border-bottom: 0; padding-bottom: 0; }
+.tier-range {
+  width: 156rpx; flex: 0 0 156rpx; margin-right: 16rpx;
+  font-size: 22rpx; font-weight: 700; color: #1f5d96;
+}
+.tier-path { font-size: 24rpx; color: #33506f; line-height: 1.5; }
+.tier-note { font-size: 21rpx; color: #8a9bad; margin-top: 2rpx; }
+
+/* 预算 */
+.formula {
+  background: #f6fafe; border: 1rpx solid #e6eff9; border-radius: 16rpx;
+  padding: 18rpx 20rpx; margin-bottom: 16rpx;
+}
+.formula-main { display: block; font-size: 27rpx; font-weight: 700; color: #183654; }
+.formula-sub { display: block; font-size: 21rpx; color: #6b7f94; margin-top: 6rpx; line-height: 1.5; }
+.brow { display: flex; align-items: flex-start; padding: 12rpx 0; border-bottom: 1rpx dashed #eef3f9; }
+.brow:last-of-type { border-bottom: 0; }
+.brow-name { font-size: 25rpx; font-weight: 600; color: #183654; }
+.brow-scope { font-size: 21rpx; color: #7d8fa3; margin-top: 2rpx; line-height: 1.45; }
+.brow-sample { width: 200rpx; flex: 0 0 200rpx; text-align: right; font-size: 20rpx; color: #a0aebe; line-height: 1.45; }
+.guide-tip {
+  margin-top: 14rpx; padding: 14rpx 18rpx; border-radius: 14rpx;
+  background: #fff9ec; border: 1rpx solid #f6e6c4;
+  font-size: 21rpx; color: #8a6d33; line-height: 1.55;
+}
+
+/* 说明段落 */
+.guide-p { font-size: 24rpx; color: #4c6280; line-height: 1.65; margin-bottom: 12rpx; }
+.guide-p:last-child { margin-bottom: 0; }
+
+/* 角色 / 时效 */
+.rrow, .srow { display: flex; align-items: center; padding: 12rpx 0; border-bottom: 1rpx solid #f2f6fa; }
+.rrow:last-child, .srow:last-child { border-bottom: 0; }
+.rrow-name, .srow-name { font-size: 25rpx; font-weight: 600; color: #183654; }
+.rrow-duty, .srow-note { font-size: 21rpx; color: #7d8fa3; margin-top: 2rpx; line-height: 1.45; }
+.rrow-limit {
+  flex: 0 0 auto; margin-left: 12rpx;
+  font-size: 20rpx; color: #1f5d96; background: #eef5fd;
+  border-radius: 999rpx; padding: 6rpx 14rpx;
+}
+.srow-hours { flex: 0 0 auto; margin-left: 12rpx; font-size: 23rpx; font-weight: 700; color: #2966a5; }
+
+.foot-note {
+  margin: 4rpx 24rpx 0; text-align: center;
+  font-size: 21rpx; color: #9aa9ba; line-height: 1.6;
+}
+.guide-pad { height: 40rpx; }
