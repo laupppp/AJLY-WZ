@@ -1,5 +1,7 @@
 # 安居乐寓物资采购管理系统
 
+[![校验](https://github.com/laupppp/AJLY-WZ/actions/workflows/verify.yml/badge.svg)](https://github.com/laupppp/AJLY-WZ/actions/workflows/verify.yml)
+
 主要安居乐寓各类物资管理，覆盖门店选品下单、内部审批、供应商接单配送、门店拍照验收，到后续对账结算的完整流程。同时也设置了各门店采购预算管理，以及战区总、中台等不同层级的审批和管控权限，后续可以实现物资采购全流程线上管理。
 
 技术形态：企业内部物资采购系统的 **H5 版**（可直接挂企业微信自建应用）＋ 与之共用同一份业务规则的微信小程序源码。
@@ -54,7 +56,7 @@ npm run h5:serve        # http://127.0.0.1:8899/index.html
 **Pages 需先手动开启一次**：仓库 → Settings → Pages → Source 选 `GitHub Actions`。之后访问：
 
 ```
-https://laupppp.github.io/AJLY-/
+https://laupppp.github.io/AJLY-WZ/
 ```
 
 Pages 发布的是**仓库里已提交的产物**，所以改了源码要先在本地 `npm run h5:build`、必要时再 `npm run h5:standalone`，连同产物一起提交。部署任务会先跑校验，产物过期就中止，不会把旧版本发上线。
