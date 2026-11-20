@@ -42,6 +42,23 @@ npm run h5:serve        # http://127.0.0.1:8899/index.html
 
 例：`http://127.0.0.1:8899/index.html?as=TEST-SUPPLIER-1#/supplier`
 
+## 在线预览与自动化
+
+仓库已配好两条 GitHub Actions：
+
+| 工作流 | 触发 | 做什么 |
+| --- | --- | --- |
+| **校验** | 每次 push / PR | `biz.js` 指纹比对、`standalone.html` 过期检测、48 个 JS 语法检查 |
+| **部署 H5 到 Pages** | push 且改动 `h5/**` | 先校验产物，过期直接中止；再用 rsync 排除调试文件，把 `h5/` 作为站点根发布 |
+
+**Pages 需先手动开启一次**：仓库 → Settings → Pages → Source 选 `GitHub Actions`。之后访问：
+
+```
+https://laupppp.github.io/AJLY-/
+```
+
+Pages 发布的是**仓库里已提交的产物**，所以改了源码要先在本地 `npm run h5:build`、必要时再 `npm run h5:standalone`，连同产物一起提交。部署任务会先跑校验，产物过期就中止，不会把旧版本发上线。
+
 ## 目录
 
 ```
@@ -50,7 +67,8 @@ h5/                      H5 前端（全部代码）
 ├── standalone.html      单文件产物（全部 CSS/JS 内联，双击可开）
 ├── css/app.css          全部样式（移动优先，≥900px 桌面段在文件末尾）
 ├── build-biz.js         构建：miniprogram/{utils,data} → js/biz.js
-├── build-standalone.js  构建：多文件 → standalone.html
+├── build-standalone.js  构建：多文件 → standalone.html（带 --check 模式）
+├── check-syntax.js      校验：h5 + miniprogram 全部 JS 的语法
 └── js/
     ├── biz.js           ★构建产物（勿手改）：业务规则唯一来源
     ├── store.js         localStorage 持久化
@@ -62,15 +80,22 @@ miniprogram/
 ├── utils/               domain（状态机/预算/结算）、perm、format —— H5 与小程序共用
 ├── data/                catalog（278 项物资）、seed、subcats、budget
 └── pages/               小程序 15 个页面（与 H5 页面一一对应）
+.github/workflows/
+├── verify.yml           推送即校验产物与语法
+└── pages.yml            部署 h5/ 到 GitHub Pages
 ```
 
 ## 命令
 
 ```bash
+npm run h5:serve        # 本地起服务 http://127.0.0.1:8899/index.html
+npm run h5:verify       # 一键校验：产物一致 + 语法（推送前跑一次）
 npm run h5:build        # 重建 biz.js（改了 miniprogram 才需要）
-npm run h5:check        # 检查 biz.js 是否过期（过期退出码 1）
+npm run h5:check        # 只检查 biz.js 是否过期（过期退出码 1）
 npm run h5:watch        # 监听源文件自动重建
 npm run h5:standalone   # 重新生成单文件版 standalone.html
+npm run h5:lint         # 48 个 JS 语法检查
+npm test                # 同 h5:verify，供 CI 或习惯用 test 的场合
 ```
 
 ## 数据说明
