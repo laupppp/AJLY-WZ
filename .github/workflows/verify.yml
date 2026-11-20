@@ -1,0 +1,29 @@
+name: 校验
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: 产物一致性与语法
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # biz.js 是从 miniprogram/utils + data 打出来的，改了规则忘了重建，
+      # 线上跑的就还是旧逻辑 —— 这里直接让 CI 红掉。
+      - name: 业务规则产物是否跟随源文件
+        run: node h5/build-biz.js --check
+
+      - name: 单文件版是否过期
+        run: node h5/build-standalone.js --check
+
+      - name: JS 语法检查
+        run: node h5/check-syntax.js

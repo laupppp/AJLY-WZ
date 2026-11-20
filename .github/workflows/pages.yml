@@ -1,0 +1,63 @@
+name: 部署 H5 到 Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'h5/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个部署，避免两次推送互相覆盖
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: 构建并发布
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 产物过期就中止，避免把旧版本发上线
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 确认产物未过期
+        run: |
+          node h5/build-biz.js --check
+          node h5/build-standalone.js --check
+
+      # h5/ 里的调试文件与构建脚本不必对外暴露
+      - name: 组织站点文件
+        run: |
+          mkdir -p _site
+          rsync -a h5/ _site/ \
+            --exclude '_fixture.html' \
+            --exclude 'probe.html' \
+            --exclude 'shot.html' \
+            --exclude 'build-biz.js' \
+            --exclude 'build-standalone.js' \
+            --exclude 'check-syntax.js' \
+            --exclude '*.md'
+          echo "--- 发布内容 ---"
+          ls -1 _site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -9,7 +9,9 @@
     "h5:check": "node h5/build-biz.js --check",
     "h5:standalone": "node h5/build-standalone.js",
     "h5:serve": "cd h5 && python3 -m http.server 8899",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "h5:lint": "node h5/check-syntax.js",
+    "h5:verify": "node h5/build-biz.js --check && node h5/build-standalone.js --check && node h5/check-syntax.js",
+    "test": "node h5/build-biz.js --check && node h5/build-standalone.js --check && node h5/check-syntax.js"
   },
   "keywords": [],
   "author": "",
