@@ -1,9 +1,9 @@
 /* 自动生成，请勿直接修改。
  * 来源：miniprogram/{utils,data}/*.js（纯逻辑模块）
  * 重新生成：node h5/build-biz.js
- * 生成时间：2026-11-20T08:14:22.286Z
- * 模块：data/budget, data/catalog, data/seed, data/subcats, utils/domain, utils/format, utils/perm
- * 源文件指纹：4969e855771e168e
+ * 生成时间：2026-11-24T02:29:46.146Z
+ * 模块：data/budget, data/catalog, data/rules, data/seed, data/subcats, utils/domain, utils/format, utils/perm
+ * 源文件指纹：ffea12bea51dcc84
  */
 (function (global) {
   var defs = {};
@@ -40,16 +40,16 @@ const round2 = function (n) { return Math.round(Number(n || 0) * 100) / 100; };
 // 三项费用科目。coef 为默认系数（元/间房/年）
 const ITEMS = [
   {
-    key: 'community', name: '社群费', short: '社群', coef: 10, tone: 'blue',
-    desc: '社群运营、活动物资、便民与氛围物资'
+    key: 'community', name: '社群活动预算', short: '社群', coef: 10, tone: 'blue', contract: '运营物资合同',
+    desc: '运营物资合同 · 社群活动、茶歇互动与现场氛围物资'
   },
   {
-    key: 'customer', name: '客户维护费', short: '维护', coef: 10, tone: 'teal',
-    desc: '客户维护礼品、门店日常服务耗材'
+    key: 'customer', name: '客诉预算', short: '客诉', coef: 10, tone: 'teal', contract: '运营物资合同',
+    desc: '运营物资合同 · 客诉安抚礼品、日常客户维护与运营耗材'
   },
   {
-    key: 'marketing', name: '营销费', short: '营销', coef: 10, tone: 'violet',
-    desc: '宣传印刷、标识标牌、展示与喷绘安装'
+    key: 'marketing', name: '营销预算', short: '营销', coef: 10, tone: 'violet', contract: '印刷品物料合同',
+    desc: '印刷品物料合同 · 宣传印刷品、标识标牌、展架喷绘与安装'
   }
 ];
 const KEYS = ITEMS.map(function (i) { return i.key; });
@@ -70,22 +70,28 @@ ITEMS.forEach(function (i) {
 const DEFAULT_ROOMS = 1000;   // 每个门店管理的房间数（演示统一 1000）
 const DEFAULT_BASE_USED = { community: 800, customer: 600, marketing: 400 }; // 期初已用（历史结转）
 
-// 商品大类 → 费用科目。目录里单个商品可用 product.budgetItem 覆盖
+// 商品大类 → 费用科目（以合同×预算项为基础分为 3 大类，兼容历史数据旧分类名）
 const CATEGORY_MAP = {
+  '社群活动物资': 'community',
+  '客诉维护物资': 'customer',
+  '印刷品物料': 'marketing',
   '活动及社群物资': 'community',
   '奖品礼品': 'customer',
+  '奖品类': 'customer',
   '日常运营耗材': 'customer',
   '宣传印刷物料': 'marketing',
   '员工物资': 'customer'
 };
 const FALLBACK = 'customer';
 
-// 接受商品（含 category / budgetItem）或订单行，返回科目 key
+// 接受商品（含 category / budgetItem / supplier）或订单行，返回科目 key
 function itemOf(thing) {
   if (!thing) return FALLBACK;
   if (thing.budgetItem && NAME[thing.budgetItem]) return thing.budgetItem;
   const cat = thing.category || '';
-  return CATEGORY_MAP[cat] || FALLBACK;
+  if (CATEGORY_MAP[cat]) return CATEGORY_MAP[cat];
+  if (thing.supplier && String(thing.supplier).indexOf('印刷') >= 0) return 'marketing';
+  return FALLBACK;
 }
 
 function itemName(key) { return NAME[key] || key; }
@@ -174,26 +180,70 @@ module.exports = {
 });
 
 __def("data/catalog", function (module, exports, require) {
-// 商品目录（由 V1.24 前端与 catalog-demo.json 生成，全部为演示数据，非合同价）
-const CATALOG=[{"id":"OP-001","name":"充电宝","spec":"20000毫安、快充、AH双线","unit":"个","price":125,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-002","name":"暖手宝","spec":"PVC材质/绒布、可充电款","unit":"个","price":61,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-003","name":"保温杯","spec":"500ml、316不锈钢、刻字","unit":"个","price":62,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-004","name":"晴雨伞","spec":"十二骨、三折叠 、晴雨两用","unit":"个","price":44,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-005","name":"运动健身包","spec":"50L、干湿分离、独立鞋仓、尼龙防泼水","unit":"个","price":78,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-006","name":"数据线","spec":"三合一快充、1.5m、编织线身、锌合金接头","unit":"条","price":32,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-007","name":"颈枕","spec":"记忆棉、U型护颈、可拆洗外套、含收纳袋","unit":"个","price":35,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-008","name":"午睡毯","spec":"法兰绒、120×150cm、可机洗、防静电","unit":"条","price":55,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-009","name":"冰丝袖套","spec":"UPF50+、冰丝凉感、一对装、多色可选","unit":"对","price":37,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-010","name":"护眼台灯","spec":"国AA级照度、无频闪、三档色温、触控调光","unit":"个","price":113,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-011","name":"蓝牙音箱","spec":"IPX5防水、蓝牙5.3、续航12h、重低音振膜","unit":"个","price":223,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-012","name":"毛巾礼盒","spec":"纯棉新疆棉、3条装、34×75cm、礼盒精装","unit":"盒","price":40,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-013","name":"收纳箱","spec":"45L、加厚塑料透明、带万向滑轮、卡扣翻盖","unit":"个","price":50,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-014","name":"吹风机","spec":"1800W、负离子护发、恒温NTC、六档风速、低噪设计","unit":"个","price":112,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-015","name":"手机支架","spec":"折叠伸缩、桌面/床头两用、防滑硅胶垫","unit":"个","price":13,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-016","name":"体脂秤","spec":"蓝牙APP、多指标（体重/体脂/肌肉量）、钢化玻璃、LED隐藏屏","unit":"个","price":267,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-018","name":"冰箱贴","spec":"强力磁吸、3D立体浮雕创意款（5个/套）、直径3.5cm、主题套装","unit":"套","price":14,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-019","name":"速干毛巾","spec":"超细纤维、双面加厚、30×80cm、吸水速干、带挂环","unit":"条","price":14,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-020","name":"瑜伽垫","spec":"TPE材质、加厚6mm、双面防滑纹、183×61cm、含背带+绑带","unit":"条","price":65,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-021","name":"运动水壶","spec":"Tritan材质、700ml、一键弹盖吸嘴、防漏锁扣、宽口易清洗","unit":"个","price":45,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-022","name":"运动腰包","spec":"防水尼龙、大屏手机仓（6.8寸）、夜光反光条、隐形耳机孔","unit":"个","price":50,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-023","name":"沙发护腰靠枕","spec":"记忆棉+凝胶层、人体工学曲面、45×32×58cm、透气网布外套","unit":"个","price":68,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-024","name":"陶瓷餐具套餐","spec":"6件套（汤勺/味碟/碗/盘/马克杯）、釉下彩、微波炉&洗碗机适用","unit":"套","price":105,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-025","name":"电子手表","spec":"带电子屏、支持心血氧监测、防水、磁吸充电","unit":"个","price":309,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-026","name":"智能手环","spec":"AMOLED屏、心率血氧睡眠监测、50米防水、14天续航","unit":"个","price":256,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-027","name":"蓝牙耳机","spec":"半入耳式、IPX4及以上防水防尘、降噪","unit":"对","price":140,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-028","name":"电动牙刷","spec":"声波震动、三档模式、感应充电、IPX7防水","unit":"个","price":137,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-029","name":"电煮锅","spec":"304不锈钢内胆、1.6L、两档功率（300/600W）、不粘煎盘盖","unit":"个","price":96,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-030","name":"便携手持小风扇","spec":"5档强风、1200mAh大电池（续航8h）、折叠支架、数显屏","unit":"个","price":26,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-031","name":"电动车挡风被-夏款","spec":"春秋薄款、防晒涂层、防雨绸面料、反光条、通用电瓶车","unit":"个","price":34,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-032","name":"电动车挡风被-冬款","spec":"冬季加厚（仿兔毛内层）、防泼水、加宽护肩护把、可拆洗","unit":"个","price":52,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-033","name":"腰靠","spec":"办公室用、记忆棉、聚酯纤维外套材质","unit":"个","price":65,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-034","name":"恒温壶/养生壶","spec":"1.5L、智能多段恒温（40/60/80/100℃）、高硼硅玻璃、防干烧","unit":"个","price":125,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-035","name":"床上用品四件套","spec":"100%纯棉、1.5m床（被套200×230cm）","unit":"套","price":160,"supplier":"运营物资供应商（演示）","category":"奖品礼品","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-036","name":"垃圾袋","spec":"绳式、黑色、45*50cm*100只","unit":"包","price":9,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"便民/活动后勤（活动物料）","installation":""},{"id":"OP-037","name":"一次性雨衣","spec":"一次性雨衣 加厚PEVA 成人 全身 含帽 均码","unit":"个","price":8,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"便民/应急（活动物料）","installation":""},{"id":"OP-038","name":"螺丝刀套装","spec":"螺丝刀套装 多功能 26合1 铬钒钢 磁吸头","unit":"套","price":38,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"便民服务（活动物料）","installation":""},{"id":"OP-039","name":"指甲刀套装","spec":"指甲刀套装 不锈钢 8件套 皮质包","unit":"套","price":59,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"便民服务（活动物料）","installation":""},{"id":"OP-040","name":"插线板","spec":"插线板 3位5孔 1.8m 防雷防过载 新国标","unit":"个","price":40,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"便民物资（活动物料）","installation":""},{"id":"OP-041","name":"衣架","spec":"衣架 10支装 塑料 防滑 加厚","unit":"套","price":5.58,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"便民物资（活动物料）","installation":""},{"id":"OP-042","name":"针线包","spec":"针线包 便携 12色线 含剪刀/顶针","unit":"套","price":16,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"便民物资（活动物料）","installation":""},{"id":"OP-043","name":"跳绳","spec":"PVC计数跳绳 2.8m 电子计数表头 轴承顺滑 长短可调 成人/儿童通用","unit":"个","price":27,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动打卡（活动物料）","installation":""},{"id":"OP-044","name":"毽子","spec":"鹅毛毽 手工缝制 橡胶底座 高约20cm 标准比赛款","unit":"个","price":6,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"传统运动（活动物料）","installation":""},{"id":"OP-045","name":"羽毛球拍","spec":"碳素纤维羽毛球拍 对拍已穿线 进攻型 约85g/支 含拍套","unit":"支","price":119,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-046","name":"羽毛球","spec":"鹅毛羽毛球 比赛级 12只/筒","unit":"筒","price":77,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-047","name":"乒乓球拍","spec":"乒乓球拍 双面反胶 横直两用 含套胶 成品拍","unit":"支","price":85,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-048","name":"乒乓球","spec":"乒乓球 三星 赛璐珞/ABS 一盒6只","unit":"盒","price":22,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-049","name":"篮球","spec":"篮球 7号标准 丁基内胆 PU耐磨 室内外通用","unit":"个","price":117,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-050","name":"桌游套装","spec":"桌游套装 防水卡牌 含狼人杀/UNO/剧本杀等 10款混装","unit":"套","price":109,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"青年社交（活动物料）","installation":""},{"id":"OP-051","name":"扑克牌","spec":"扑克牌 防水PVC塑料 标准54张 含2张鬼牌","unit":"套","price":9,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-052","name":"象棋","spec":"象棋 磁吸折叠棋盘 实木棋子 40mm 含收纳","unit":"套","price":52,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-053","name":"围棋","spec":"围棋 磁性便携折叠棋盘 19路 含云子棋子 361子","unit":"套","price":70,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-054","name":"五子棋","spec":"五子棋 磁性便携 含棋子 可折叠棋盘","unit":"套","price":33,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-055","name":"魔方","spec":"魔方 三阶速拧 磁力定位 比赛级 含底座","unit":"个","price":22,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-056","name":"乐高积木","spec":"积木 基础颗粒 中盒 500+件 兼容乐高","unit":"套","price":37,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子搭建（活动物料）","installation":""},{"id":"OP-057","name":"儿童绘本","spec":"儿童绘本 A4精装全彩 分龄绘本套装 10册/套","unit":"套","price":36,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子阅读（活动物料）","installation":""},{"id":"OP-058","name":"马克笔","spec":"马克笔 24色双头 酒精性 可叠色 含笔袋","unit":"套","price":25,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"绘画活动（活动物料）","installation":""},{"id":"OP-059","name":"水彩颜料","spec":"水彩颜料 12色固体套装 含画笔/笔洗 便携","unit":"套","price":19,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"绘画活动（活动物料）","installation":""},{"id":"OP-060","name":"素描纸","spec":"素描纸 A3 100张/包 180g 双面可用","unit":"包","price":31,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"绘画（活动物料）","installation":""},{"id":"OP-061","name":"彩色卡纸","spec":"彩色卡纸 A4 100张/包 120g 十色混装","unit":"包","price":13,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工（活动物料）","installation":""},{"id":"OP-062","name":"安全剪刀","spec":"安全剪刀 圆头儿童 不锈钢刀刃 手工专用 2把/组","unit":"把","price":8,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工（活动物料）","installation":""},{"id":"OP-063","name":"固体胶","spec":"固体胶 PVP 大容量 21g/支 速干","unit":"支","price":3,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工粘贴（活动物料）","installation":""},{"id":"OP-064","name":"折纸材料包","spec":"折纸材料包 15cm 100张 多色 含教程","unit":"包","price":5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工折纸（活动物料）","installation":""},{"id":"OP-065","name":"超轻黏土","spec":"超轻黏土 24色 无毒 不粘手 可晾干 500g/套","unit":"套","price":34,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子手工（活动物料）","installation":""},{"id":"OP-066","name":"圆形气球","spec":"圆形气球 100只/包 混色 加厚乳胶 可充气 5/10/12寸","unit":"包","price":24,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"装饰/游戏（活动物料）","installation":""},{"id":"OP-067","name":"抽奖箱","spec":"抽奖箱 亚克力透明 双格 含100小球 30x30x30cm","unit":"套","price":67.79,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"互动抽奖（活动物料）","installation":""},{"id":"OP-068","name":"幸运转盘","spec":"幸运转盘 60cm 指针可书写 含支架","unit":"个","price":64,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"互动抽奖（活动物料）","installation":""},{"id":"OP-069","name":"计分牌","spec":"计分牌 翻分牌 0-99 双面 便携","unit":"个","price":19,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"竞技活动（活动物料）","installation":""},{"id":"OP-070","name":"秒表","spec":"秒表 电子 100组记忆 防水 含挂绳","unit":"个","price":69,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"竞技计时（活动物料）","installation":""},{"id":"OP-071","name":"口哨","spec":"口哨 不锈钢裁判哨 含珠 高分贝 含挂绳","unit":"个","price":10,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"裁判/组织（活动物料）","installation":""},{"id":"OP-072","name":"号码布","spec":"号码布 1-50号 防水 含别针 每套50张","unit":"套","price":78,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"比赛分组（活动物料）","installation":""},{"id":"OP-073","name":"团队袖标","spec":"团队袖标 10条/包 红蓝分队 魔术贴 成人通用","unit":"包","price":36,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"团队分组（活动物料）","installation":""},{"id":"OP-074","name":"眼罩","spec":"眼罩 冰丝遮光 松紧可调节 成人通用","unit":"个","price":14,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"互动游戏（活动物料）","installation":""},{"id":"OP-075","name":"绑腿带","spec":"绑腿带 魔术贴宽绑带 双人三足 含护腿垫","unit":"个","price":6,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"团队协作游戏（活动物料）","installation":""},{"id":"OP-076","name":"趾压板","spec":"趾压板 EVA拼接 防滑 指压 含收纳袋","unit":"个","price":41,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"互动挑战（活动物料）","installation":""},{"id":"OP-077","name":"钓鱼玩具","spec":"钓鱼玩具 磁吸 儿童 含竿2支/鱼10条","unit":"套","price":40,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子游戏（活动物料）","installation":""},{"id":"OP-078","name":"沙包","spec":"沙包 棉布 五谷填充 100g/个 3个/套","unit":"套","price":11,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"传统游戏（活动物料）","installation":""},{"id":"OP-079","name":"套圈玩具","spec":"套圈玩具 塑料圈 10只 含立柱5根 可折叠","unit":"套","price":26,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"互动游戏（活动物料）","installation":""},{"id":"OP-080","name":"飞行棋","spec":"飞行棋 防水棋盘 经典款 含棋子/骰子","unit":"套","price":34,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子/益智（活动物料）","installation":""},{"id":"OP-081","name":"跳棋","spec":"跳棋 玻璃珠 防水收纳盒 含棋盘","unit":"套","price":16,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子/益智（活动物料）","installation":""},{"id":"OP-082","name":"阿瓦隆","spec":"阿瓦隆 防水卡牌 标准版 含角色牌/规则说明书","unit":"套","price":61,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"阵营推理（活动物料）","installation":""},{"id":"OP-083","name":"UNO","spec":"UNO纸牌 防水 108张 标准版 含说明书","unit":"套","price":10,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子互动（活动物料）","installation":""},{"id":"OP-084","name":"狼人杀卡牌","spec":"狼人杀卡牌 防水 含身份牌/法官手册 标准版","unit":"套","price":8,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"推理社交（活动物料）","installation":""},{"id":"OP-085","name":"三国杀","spec":"三国杀 防水卡牌 标准版 含武将牌/身份牌 暗金豪华版","unit":"套","price":51,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"策略卡牌（活动物料）","installation":""},{"id":"OP-086","name":"谁是卧底","spec":"谁是卧底 防水卡牌 含词库 500词 标准版","unit":"套","price":19,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"语言推理（活动物料）","installation":""},{"id":"OP-087","name":"大富翁桌游","spec":"大富翁 防水棋盘 含骰子/道具卡 标准版","unit":"套","price":68,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"财商模拟（活动物料）","installation":""},{"id":"OP-088","name":"德国心脏病","spec":"德国心脏病 防水卡牌 含铃铛 标准版","unit":"套","price":44,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"反应力游戏（活动物料）","installation":""},{"id":"OP-089","name":"达芬奇密码","spec":"达芬奇密码 防水卡牌 木质数字牌 标准版","unit":"套","price":42,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"逻辑推理（活动物料）","installation":""},{"id":"OP-090","name":"行动代号","spec":"行动代号 防水卡牌 双人版 含图卡/词卡","unit":"套","price":42,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"词语联想（活动物料）","installation":""},{"id":"OP-091","name":"矮人矿工","spec":"矮人矿工 防水卡牌 身份推理 标准版","unit":"套","price":51,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"身份推理（活动物料）","installation":""},{"id":"OP-092","name":"真心话大冒险","spec":"真心话大冒险 防水卡牌 成人版 100张","unit":"套","price":19,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"破冰互动（活动物料）","installation":""},{"id":"OP-093","name":"害你在心口难开","spec":"害你在心口难开 防水卡牌 爆笑互动 100张","unit":"套","price":24,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"爆笑互动（活动物料）","installation":""},{"id":"OP-094","name":"妙语说书人","spec":"妙语说书人 防水卡牌 含图卡84张 正版","unit":"套","price":76,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"创意表达（活动物料）","installation":""},{"id":"OP-095","name":"卡坦岛","spec":"卡坦岛 桌游 基础版 正版 含版图/资源卡，基础版红盒/海洋版蓝盒","unit":"套","price":157,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"策略桌游（活动物料）","installation":""},{"id":"OP-096","name":"呼啦圈","spec":"呼啦圈 加厚PVC 90cm 可拆卸 可调重量","unit":"个","price":37,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动健身（活动物料）","installation":""},{"id":"OP-097","name":"拔河绳","spec":"拔河绳 尼龙编织 30m 直径3cm 含防滑握把","unit":"条","price":224,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"团队竞技（活动物料）","installation":""},{"id":"OP-098","name":"接力棒","spec":"接力棒 铝合金 塑胶握把 标准田径款 4支/套","unit":"套","price":9,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"田径运动（活动物料）","installation":""},{"id":"OP-099","name":"弹力球","spec":"弹力球 橡胶 直径6cm 高弹 3个/组","unit":"组","price":8,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子游戏（活动物料）","installation":""},{"id":"OP-100","name":"泡沫棒","spec":"泡沫棒 EVA 加长款 60cm 安全软质","unit":"根","price":1.5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"趣味对抗（活动物料）","installation":""},{"id":"OP-101","name":"障碍锥桶","spec":"障碍锥桶 PVC 50cm 反光条 可叠放 含底座","unit":"个","price":20,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"体能挑战（活动物料）","installation":""},{"id":"OP-102","name":"投壶套装","spec":"投壶套装 木质壶1+箭10支 传统款 含收纳","unit":"套","price":46,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"传统游戏（活动物料）","installation":""},{"id":"OP-103","name":"磁吸飞镖盘","spec":"磁吸飞镖盘 双面磁性 含飞镖6支 40cm","unit":"套","price":32,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"竞技游戏（活动物料）","installation":""},{"id":"OP-104","name":"桌面冰壶","spec":"桌面冰壶 迷你套装 含壶石8/赛道 可玩","unit":"套","price":69,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"趣味竞技（活动物料）","installation":""},{"id":"OP-105","name":"保龄球套装","spec":"保龄球套装 塑料球+瓶10 可立 便携款","unit":"套","price":57,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"趣味运动（活动物料）","installation":""},{"id":"OP-106","name":"泡泡机","spec":"泡泡机 电动自动出泡 大容量 含泡泡液","unit":"个","price":33,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"氛围互动（活动物料）","installation":""},{"id":"OP-107","name":"风筝","spec":"风筝 加厚尼龙 三角款 含线轮 1.2m","unit":"套","price":13,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"户外运动（活动物料）","installation":""},{"id":"OP-108","name":"陀螺","spec":"陀螺 木质传统 拉绳启动 直径8cm","unit":"个","price":13,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"传统游戏（活动物料）","installation":""},{"id":"OP-109","name":"荧光棒","spec":"荧光棒 发光儿童款 多色 100支/包","unit":"包","price":50,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"夜间活动（活动物料）","installation":""},{"id":"OP-110","name":"腰旗橄榄球套装","spec":"腰旗橄榄球套装 腰旗6条+软球1+规则卡 团队款","unit":"套","price":89,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"团队运动（活动物料）","installation":""},{"id":"OP-111","name":"滑板","spec":"滑板 枫木双翘 入门级 含护具套装 8寸","unit":"套","price":76,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"潮流运动（活动物料）","installation":""},{"id":"OP-112","name":"瑜伽球","spec":"瑜伽球 65cm 加厚防爆 含气筒/收纳袋","unit":"个","price":39,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动健身（活动物料）","installation":""},{"id":"OP-113","name":"握力器","spec":"握力器 可调节 计数 不锈钢 5-60kg","unit":"个","price":21,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"健身互动（活动物料）","installation":""},{"id":"OP-114","name":"腕力球","spec":"腕力球 自启动 陀螺仪 含防甩绳","unit":"个","price":35,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"健身互动（活动物料）","installation":""},{"id":"OP-115","name":"电子飞镖靶","spec":"电子飞镖靶 磁性软头 含镖6支 自动计分","unit":"套","price":86,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"竞技游戏（活动物料）","installation":""},{"id":"OP-116","name":"桌面足球","spec":"桌面足球 台式对战 含小球2 台面型","unit":"套","price":77,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"趣味竞技（活动物料）","installation":""},{"id":"OP-117","name":"沙壶球","spec":"沙壶球 桌面 含球杆2+壶球 木质","unit":"套","price":105,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"趣味竞技（活动物料）","installation":""},{"id":"OP-118","name":"平衡板","spec":"平衡板 木质 平衡训练 防滑 承重120kg","unit":"个","price":60,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"运动健身（活动物料）","installation":""},{"id":"OP-120","name":"拉力器","spec":"拉力器 弹力绳 多档阻力 含握把","unit":"个","price":29,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"健身互动（活动物料）","installation":""},{"id":"OP-121","name":"弹力圈","spec":"弹力圈 乳胶 多档阻力 3条/套","unit":"套","price":33,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"健身互动（活动物料）","installation":""},{"id":"OP-122","name":"旱地冰壶套装","spec":"旱地冰壶套装 仿真冰道 含壶石8 可折叠","unit":"套","price":176,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"趣味竞技（活动物料）","installation":""},{"id":"OP-125","name":"拼图","spec":"拼图 1000片 风景/名画 精装 含图纸","unit":"盒","price":31,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-126","name":"叠叠高","spec":"叠叠高 实木54块 精装 含骰子","unit":"套","price":43,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-127","name":"便携麻将","spec":"便携麻将 树脂 折叠棋盘 含骰子 旅行款 144张","unit":"副","price":108,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-128","name":"孔明锁","spec":"孔明锁 木质鲁班锁 六根 益智 含解法图","unit":"个","price":35,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-129","name":"九连环","spec":"九连环 金属 传统益智 含解法图","unit":"个","price":33,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-130","name":"华容道","spec":"4阶华容道 滑块 木质 经典款 含说明","unit":"个","price":44.2,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-131","name":"大话骰盅","spec":"大话骰盅 树脂 5骰+骰盅 含杯","unit":"套","price":5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"桌游互动（活动物料）","installation":""},{"id":"OP-132","name":"你画我猜卡","spec":"你画我猜卡 防水词卡 200张 双面 含笔板","unit":"套","price":60,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"破冰互动（活动物料）","installation":""},{"id":"OP-133","name":"猜歌名卡","spec":"猜歌名卡 防水曲目卡 蓝牙播放 含音箱（100张）","unit":"套","price":41,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"音乐互动（活动物料）","installation":""},{"id":"OP-134","name":"词语接龙卡","spec":"词语接龙卡 防水词库卡 200张","unit":"套","price":32,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"语言游戏（活动物料）","installation":""},{"id":"OP-135","name":"多米诺骨牌","spec":"多米诺骨牌 木质 1000片 含摆推器","unit":"套","price":120,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-136","name":"磁力片","spec":"磁力片 100片 益智拼搭 含卡片 兼容款","unit":"套","price":72,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子搭建（活动物料）","installation":""},{"id":"OP-137","name":"3D立体拼图","spec":"3D立体拼图 纸质建筑模型 含胶水 尺寸30cm+","unit":"套","price":68.875,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子手工（活动物料）","installation":""},{"id":"OP-138","name":"数字油画","spec":"数字油画 40x50cm 含画笔/颜料/画框","unit":"套","price":31,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"绘画活动（活动物料）","installation":""},{"id":"OP-139","name":"沙画套装","spec":"沙画套装 彩色沙 10色 含画框3幅","unit":"套","price":87.12,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子手工（活动物料）","installation":""},{"id":"OP-140","name":"羊毛毡材料包","spec":"羊毛毡材料包 基础戳戳乐 含针/垫 10款","unit":"套","price":35,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-141","name":"钻石画","spec":"钻石画 满钻 30x40cm 含点钻笔/胶盘","unit":"套","price":36,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-142","name":"儿童显微镜","spec":"儿童显微镜 100-1200倍 含标本片 便携","unit":"个","price":56,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"科学探索（活动物料）","installation":""},{"id":"OP-143","name":"儿童望远镜","spec":"儿童望远镜 8x21 橡胶目镜 防摔","unit":"个","price":110,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"户外探索（活动物料）","installation":""},{"id":"OP-144","name":"发光地球仪","spec":"发光地球仪 LED触控 中英双语 直径25cm","unit":"个","price":183,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"科普教育（活动物料）","installation":""},{"id":"OP-145","name":"STEM科学实验套装","spec":"STEM科学实验套装 物理化学 安全材料 30+实验","unit":"套","price":133,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"科学探索（活动物料）","installation":""},{"id":"OP-146","name":"蒙眼贴鼻子套装","spec":"蒙眼贴鼻子套装 加厚纸板 含眼罩+鼻子贴 90cm","unit":"套","price":31,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"互动游戏（活动物料）","installation":""},{"id":"OP-148","name":"桌面抓娃娃机","spec":"桌面抓娃娃机 迷你电动 含公仔10 充电款","unit":"个","price":120,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"趣味互动（活动物料）","installation":""},{"id":"OP-149","name":"解压捏捏乐","spec":"解压捏捏乐 TPR慢回弹 多造型 12个/盒","unit":"盒","price":44,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"解压互动（活动物料）","installation":""},{"id":"OP-150","name":"指尖陀螺","spec":"指尖陀螺 金属 轴承 减压 含指套","unit":"个","price":17,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"解压互动（活动物料）","installation":""},{"id":"OP-152","name":"糖果类（含口香糖）","spec":"硬糖/棒棒糖/棉花糖/口香糖 混合口味 袋装（500g/袋）","unit":"袋","price":24,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-153","name":"巧克力/能量食品","spec":"巧克力/能量棒 独立包装 混装（500g/袋）","unit":"袋","price":27,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-154","name":"饼干/糕点","spec":"夹心饼干/派/苏打饼干/沙琪玛 多口味混装（约20小包）500g/袋","unit":"袋","price":19,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-155","name":"膨化食品","spec":"薯片/米饼/爆米花 多味混装（5~6g/包）50包/袋","unit":"袋","price":27,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-156","name":"坚果炒货","spec":"瓜子/每日坚果 独立小包（20g*12包）/袋","unit":"袋","price":36,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-157","name":"蜜饯果干","spec":"话梅 九制/西梅/雪梅 多口味散装 500g/袋","unit":"袋","price":26,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-158","name":"海苔","spec":"海苔 原味/芝麻/坚果 多味混装（1.5g/包）24包/袋","unit":"袋","price":33,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-159","name":"辣条","spec":"辣条 大面筋/亲嘴烧/小面筋 混装 1000g/袋","unit":"袋","price":34,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-160","name":"果冻","spec":"吸吸果冻 混合口味 30支/箱","unit":"支","price":16,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"儿童零食（活动物料）","installation":""},{"id":"OP-161","name":"零食大礼包","spec":"综合混装 1000g/箱","unit":"箱","price":89,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-162","name":"碳酸饮料（可乐）","spec":"可乐 330ml罐装 经典/无糖 混装","unit":"罐","price":3,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-163","name":"气泡水","spec":"气泡水 480ml瓶装 白桃/青瓜/白草莓 混装","unit":"瓶","price":4.5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-164","name":"茶饮料","spec":"柠檬茶/红茶/无糖茶 瓶装 混装","unit":"瓶","price":5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-165","name":"凉茶","spec":"凉茶 310ml罐装","unit":"罐","price":3,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-166","name":"椰子饮品","spec":"植物蛋白椰汁 245ml罐装","unit":"罐","price":5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-167","name":"乳饮料","spec":"复原乳/调制乳 盒装","unit":"盒","price":2.5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"儿童活动饮品（活动物料）","installation":""},{"id":"OP-168","name":"饮用水","spec":"天然水 550ml×24瓶/箱","unit":"瓶","price":1.5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动用水（活动物料）","installation":""},{"id":"OP-169","name":"功能/运动饮料","spec":"能量/电解质/运动饮料 罐装瓶装 混装","unit":"瓶","price":5,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"能量补给（活动物料）","installation":""},{"id":"OP-170","name":"毛绒公仔","spec":"中号 软体 多款","unit":"个","price":42,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"亲子互动（活动物料）","installation":""},{"id":"OP-173","name":"热缩片材料包","spec":"透明热缩片 含画笔/烤箱纸 DIY","unit":"套","price":105,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-175","name":"蜡烛DIY套件","spec":"果冻蜡/香薰蜡 含模具","unit":"套","price":49,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-176","name":"干花材料包","spec":"压花/干花 书签制作","unit":"套","price":43,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-177","name":"剪纸材料包","spec":"红色宣纸 含图样/剪刀","unit":"套","price":25,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"传统手工（活动物料）","installation":""},{"id":"OP-178","name":"衍纸材料包","spec":"彩色纸条 含卷纸笔","unit":"套","price":20,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-179","name":"不织布材料包","spec":"贴画/挂件 含针线","unit":"套","price":57,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-180","name":"手账材料包","spec":"贴纸/胶带/印章 混装","unit":"套","price":21,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-181","name":"木质拼装","spec":"拼装小车/模型 木工DIY","unit":"套","price":18,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-182","name":"扎染材料包","spec":"染料/白布/皮筋 传统","unit":"套","price":44,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"传统手工（活动物料）","installation":""},{"id":"OP-183","name":"军棋","spec":"磁性 折叠棋盘 实木棋子","unit":"副","price":40,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-184","name":"国际象棋","spec":"磁性 折叠 实木","unit":"副","price":41,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-185","name":"数独","spec":"磁性 便携 含题卡","unit":"套","price":50,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-186","name":"七巧板","spec":"木质 经典 益智","unit":"套","price":8,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-187","name":"汉诺塔","spec":"木质 益智 含解法","unit":"套","price":40,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-188","name":"金字塔魔方","spec":"四阶 磁力 比赛级","unit":"个","price":45,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-189","name":"桥牌","spec":"标准版 含计分卡","unit":"副","price":19,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-190","name":"无线话筒","spec":"便携 扩音 UHF 双麦","unit":"套","price":117,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动音响（活动物料）","installation":""},{"id":"OP-191","name":"书法套装","spec":"文房四宝 毛笔/墨/砚/水写布","unit":"套","price":40,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"才艺文化（活动物料）","installation":""},{"id":"OP-192","name":"宣纸","spec":"生宣 四尺 一刀100张","unit":"刀","price":24,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"才艺文化（活动物料）","installation":""},{"id":"OP-193","name":"彩旗/三角旗","spec":"10m 成串 多色","unit":"串","price":8,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"节日氛围（活动物料）","installation":""},{"id":"OP-194","name":"拉花/彩带","spec":"装饰 多色 成卷 90m/卷","unit":"卷","price":18,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"节日氛围（活动物料）","installation":""},{"id":"OP-196","name":"拍照道具","spec":"相框/眼镜/ins牌 打卡","unit":"套","price":25,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"拍照打卡（活动物料）","installation":""},{"id":"OP-197","name":"LED灯串","spec":"10m 电池款 暖光 防水","unit":"串","price":24,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"氛围布置（活动物料）","installation":""},{"id":"OP-198","name":"一次性纸杯","spec":"加厚 中号 100只/包","unit":"包","price":22,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"活动后勤（活动物料）","installation":""},{"id":"OP-199","name":"折叠椅","spec":"户外 铝合金 便携 承重150kg","unit":"把","price":87,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"户外露营（活动物料）","installation":""},{"id":"OP-200","name":"折叠桌","spec":"铝合金 便携 120cm","unit":"张","price":117,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"户外露营（活动物料）","installation":""},{"id":"OP-201","name":"野餐垫","spec":"加厚 防潮 2m×2m","unit":"张","price":46,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"户外露营（活动物料）","installation":""},{"id":"OP-202","name":"天幕/遮阳棚","spec":"3m×3m 防晒防雨","unit":"顶","price":110,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"户外露营（活动物料）","installation":""},{"id":"OP-203","name":"一次性桌布","spec":"加厚 大号 防水\n适配长120*宽60cm长桌 10只/包","unit":"包","price":13,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动后勤（活动物料）","installation":""},{"id":"OP-204","name":"帆布袋","spec":"活动定制 棉麻 手提\n宽约35cm高约38cm","unit":"个","price":18,"supplier":"运营物资供应商（演示）","category":"活动及社群物资","demoOnly":false,"note":"活动伴手（活动物料）","installation":""},{"id":"OP-205","name":"活性炭包","spec":"6kg装、高效除甲醛除异味、可晾晒重复使用","unit":"盒","price":47,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-206","name":"杀虫剂喷雾","spec":"500ml、无香型、广谱杀虫（蟑螂/蚂蚁/蚊蝇）","unit":"瓶","price":20,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-207","name":"杀蟑饵剂","spec":"8个装、连锁灭蟑、胶饵诱杀、长效防潮","unit":"包","price":23,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-208","name":"地漏过滤网","spec":"50片装、一次性粘贴式、细密网格防堵","unit":"包","price":8,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-209","name":"桌椅静音脚套保护套","spec":"16个装、方圆通用款、加厚硅胶/毛毡材质、防滑耐磨、静音防刮、适用桌椅沙发脚","unit":"份","price":7,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"租户居住体验提升。可以隔音，提供给上下楼或隔壁因噪音投诉的租户","installation":""},{"id":"OP-210","name":"挡水条","spec":"20mm厚*30mm宽*1米长、加厚实心橡胶/PVC、可裁剪、防霉防滑、免打孔安装","unit":"份","price":12.8,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"卫生间狭小，水流容易外溢，挡水条可以加在卫生间门口挡水","installation":""},{"id":"OP-211","name":"公寓的防撞条","spec":"L型二代加厚款、米色15mm厚、4米/卷、免贴胶自粘","unit":"份","price":14,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"安全防护提示","installation":""},{"id":"OP-212","name":"吸音棉","spec":"110型、2cm厚×1米宽、自粘式、环保阻燃、隔音降噪","unit":"份","price":19,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"隔音处理","installation":""},{"id":"OP-213","name":"雪糕筒","spec":"高650mm、宽310mm、橡胶/塑料材质、带反光条","unit":"个","price":19,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"临时隔离或警示","installation":""},{"id":"OP-214","name":"防摔蚊帐","spec":"1.5m床适用（150×200cm）、全包围防摔、U型拉链门","unit":"份","price":191,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-215","name":"沙发布","spec":"180*260cm、四季通用、A类面料、可机洗","unit":"条","price":80,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"租户居住体验提升。用于退租后的轻微破损沙发遮盖","installation":""},{"id":"OP-216","name":"空调挡板","spec":"挂机通用、无孔一体式安装、可调节风向、防直吹","unit":"件","price":27,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"客房装饰或功能性用品","installation":""},{"id":"OP-217","name":"折叠平板手推车","spec":"90×60cm、承重900斤、折叠便携","unit":"台","price":179,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-218","name":"应急药品箱","spec":"急救包套装（含全套常用药品及器械）、家用医疗标准配置，12种急救用品组合","unit":"个","price":77,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"安全应急","installation":""},{"id":"OP-219","name":"钥匙箱","spec":"24位铝合金钥匙箱、带锁壁挂式、透明视窗","unit":"个","price":50,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"钥匙管理","installation":""},{"id":"OP-220","name":"入户地垫","spec":"深灰色、120×240cm、PVC/橡胶底防滑、耐磨除尘","unit":"份","price":232,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"公共区域清洁","installation":""},{"id":"OP-221","name":"除胶剂","spec":"强力去胶通用型、除不干胶/标签残胶、开荒保洁专用，450ml","unit":"瓶","price":17.7,"supplier":"运营物资供应商（演示）","category":"日常运营耗材","demoOnly":false,"note":"清洁维护","installation":""},{"id":"AD-001","name":"户外喷绘布","spec":"530g/㎡ 户外喷绘布（“530”为克重），720dpi 高清喷绘","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-002","name":"灯箱画面","spec":"高清软膜灯箱布，1440dpi（布基灯箱片，不含型材/光源）","unit":"㎡","price":180,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-003","name":"刀刮布","spec":"户外防水刀刮布，1440dpi","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-004","name":"网格布","spec":"户外网格喷绘布","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-005","name":"室内写真背胶","spec":"高清写真背胶，1440dpi","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-006","name":"户外写真背胶","spec":"户外防水写真背胶，1440dpi","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-007","name":"可移车贴","spec":"户外可移车贴，1440dpi","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-008","name":"单透贴","spec":"单向透视贴，1440dpi","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-009","name":"透明贴","spec":"PET透明膜彩印（基材PET，厚度0.1–0.15mm）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-010","name":"磨砂玻璃贴","spec":"磨砂膜刻绘","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-011","name":"专用防滑地贴","spec":"地面专用防滑耐磨地贴膜＋UV彩印，适用于室内平整地面","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-012","name":"UV软膜","spec":"UV写真软膜，1440dpi（软膜基材，不含型材/光源）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-013","name":"自动扶梯侧板广告贴","spec":"户外耐磨可移除PVC广告膜＋高清写真覆保护膜（建议注明标准尺寸区间，如高×宽）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-014","name":"KT板写真展板","spec":"5mm KT板＋单面写真","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-015","name":"PVC写真标牌","spec":"5mm PVC发泡板＋单面写真","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-016","name":"PVC双面指示牌","spec":"5mm PVC板＋双面写真","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-017","name":"UV直喷PVC板","spec":"5mm PVC板UV平板喷印","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-018","name":"亚克力标牌","spec":"5mm亚克力板UV直喷（明确工艺，取消“或贴画”）","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-019","name":"房源招租展示牌","spec":"5mm PVC发泡板＋高清写真，60×90cm","unit":"块","price":90,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-020","name":"易拉宝","spec":"80×200cm，铝合金架＋写真画面","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-021","name":"丽屏展架","spec":"80×180cm，铝合金立式展示框，含PP写真画面","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-022","name":"人字板（A字展架）","spec":"60×90cm，铝合金折叠架＋双面5mm PVC广告画面","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-023","name":"拉网展架","spec":"3×2.3m，金属架＋写真画面","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-024","name":"立式展示牌","spec":"A3，画面＋支架","unit":"个","price":90,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-025","name":"桌面台卡","spec":"A4，透明台卡","unit":"个","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-026","name":"条幅横幅","spec":"常规红布/喷绘横幅","unit":"米","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-027","name":"吊旗","spec":"写真画面＋上下杆，约1.5×0.6m","unit":"套","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-028","name":"电梯地毯","spec":"5mm（±0.5）阻燃耐磨圈绒毯面＋防滑底背，四周包边，按轿厢尺寸裁切（典型轿厢1.4×1.4–1.6×1.6m，需注明）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-029","name":"宣传单页","spec":"A4，128g铜版纸，双面彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-030","name":"DM折页","spec":"A4，157g铜版纸，双面彩印、折页","unit":"份","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-031","name":"宣传折页手册","spec":"成品尺寸10×21cm（展开尺寸另注），157g铜版纸，6折页双面彩印","unit":"份","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-032","name":"不干胶贴纸","spec":"不干胶彩印（建议按㎡计价；或注明常用尺寸如10×10cm、最大尺寸A3）","unit":"张","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-033","name":"纸质宣传吊牌","spec":"28×13cm，240g铜版纸彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-034","name":"POP展示卡","spec":"62.5×42.8cm，300g铜版纸彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-035","name":"纸质海报","spec":"A2，200g铜版纸，单面彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-036","name":"房源信息展示卡","spec":"A5，250g铜版纸，双面彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-037","name":"租客服务联系卡","spec":"90×54mm，300g铜版纸，双面彩印（企业微信二维码位）","unit":"张","price":15,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-038","name":"入住指引卡","spec":"A5，200g铜版纸，双面彩印","unit":"张","price":15,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-039","name":"邀请函/贺卡","spec":"A5，250g铜版纸，双面彩印、压痕对折","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-040","name":"证书/聘书（含封套）","spec":"A4，绒面证书封套＋200g内页彩印","unit":"套","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-041","name":"手提宣传袋","spec":"250g白卡纸，四色印刷，30×40×8cm","unit":"个","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-042","name":"员工工卡","spec":"标准IC卡尺寸85.6×54mm，0.76mm白色PVC卡，双面彩色印刷（姓名、照片等）","unit":"张","price":15,"supplier":"广告印刷供应商（待确认）","category":"员工物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-043","name":"工卡挂绳","spec":"15mm涤纶织带，双面热转印品牌标识，安全脱扣","unit":"套","price":15,"supplier":"广告印刷供应商（待确认）","category":"员工物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-044","name":"锦旗","spec":"80×120cm，绒布（明确材质，去掉“或棉布”），印制文字及流苏","unit":"条","price":65,"supplier":"广告印刷供应商（待确认）","category":"活动及社群物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-045","name":"活动抽奖箱","spec":"35×35×35cm，5mm PVC板彩色裱画，顶部投入口","unit":"个","price":65,"supplier":"广告印刷供应商（待确认）","category":"活动及社群物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-046","name":"活动抽奖转盘","spec":"直径60cm（±2），金属支架＋PVC印刷转盘","unit":"套","price":65,"supplier":"广告印刷供应商（待确认）","category":"活动及社群物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-047","name":"金属奖牌","spec":"直径约6cm，合金材质，定制图文，含挂带","unit":"个","price":65,"supplier":"广告印刷供应商（待确认）","category":"活动及社群物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-048","name":"奖杯","spec":"高度25cm（±1），树脂/水晶组合奖杯，含刻字牌","unit":"个","price":65,"supplier":"广告印刷供应商（待确认）","category":"活动及社群物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-049","name":"活动侧旗/刀旗","spec":"50×180cm，经编涤纶旗帜布双面热转印（注明布料），含3m金属立杆及底座","unit":"套","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-050","name":"活动折叠帐篷","spec":"3×3m，铝合金骨架＋防水牛津布顶棚，品牌单色印制","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"活动及社群物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-051","name":"活动桌布","spec":"180×140cm（±2），涤纶布（注明克重如210g）热转印品牌标识","unit":"块","price":35,"supplier":"广告印刷供应商（待确认）","category":"活动及社群物资","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-052","name":"桁架租赁（含搭拆）","spec":"铝合金桁架背景架（含搭拆），按套/米计价，避免与序号63–65安装服务重复","unit":"㎡","price":120,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含现场搭建及拆除"},{"id":"AD-053","name":"定制纸巾盒","spec":"18×12×9.5cm、ABS盒体＋木纹饰面顶盖、正面印制品牌LOGO","unit":"个","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-054","name":"卡布灯箱（含光源）","spec":"铝型材6–8cm箱体、LED光源（注明色温/防水等级）＋UV软膜画面（整箱含光源）","unit":"㎡","price":180,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-055","name":"桌面海报展示架","spec":"A4，透明亚克力插页式台牌，3mm厚","unit":"个","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-056","name":"室内挂画框","spec":"A2，铝合金边框＋透明保护面板，壁挂式","unit":"套","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-057","name":"壁挂式公告栏","spec":"铝合金边框＋磁性展示背板＋透明保护面板，90×120cm（±2）","unit":"套","price":180,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-058","name":"车库悬挂式导向吊牌","spec":"3mm铝塑板双面UV画面＋金属吊挂件（建议标注标准尺寸如90×120cm，单位与56/58统一）","unit":"㎡","price":180,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-059","name":"温馨提示牌","spec":"3mm PVC板＋UV彩印，20×30cm","unit":"块","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-060","name":"车库反光导视牌","spec":"1.5mm铝板＋工程级反光膜，40×60cm（±2）","unit":"块","price":35,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-061","name":"不锈钢标识牌","spec":"30×20cm，1mm拉丝不锈钢蚀刻填色","unit":"块","price":180,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-062","name":"门店品牌发光字","spec":"304不锈钢围边＋亚克力面板＋LED光源（注明色温/防水等级），字高30cm（±2，或给范围20–40cm）","unit":"字","price":180,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-063","name":"车库反光贴","spec":"工程级反光膜，UV打印、模切（建议注明常用宽度如10/15cm或按㎡）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-064","name":"普通安装","spec":"平面物料常规现场张贴及安装","unit":"㎡","price":120,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":""},{"id":"AD-065","name":"高空作业设备","spec":"吊车/升降平台租赁","unit":"天","price":120,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":""},{"id":"AD-066","name":"高空安装人工","spec":"具备高空资质的安装人员","unit":"人/天","price":120,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":""},{"id":"AD-067","name":"现场拆除/维护","spec":"原有广告物料拆除、修复","unit":"㎡","price":120,"supplier":"广告印刷供应商（待确认）","category":"宣传印刷物料","demoOnly":true,"note":"","installation":""}];
+// 商品目录（按采购合同与预算项分为 3 大类，全部为演示数据，非合同价）
+const CATALOG=[{"id":"OP-001","name":"充电宝","spec":"20000毫安、快充、AH双线","unit":"个","price":125,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-002","name":"暖手宝","spec":"PVC材质/绒布、可充电款","unit":"个","price":61,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-003","name":"保温杯","spec":"500ml、316不锈钢、刻字","unit":"个","price":62,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-004","name":"晴雨伞","spec":"十二骨、三折叠 、晴雨两用","unit":"个","price":44,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-005","name":"运动健身包","spec":"50L、干湿分离、独立鞋仓、尼龙防泼水","unit":"个","price":78,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-006","name":"数据线","spec":"三合一快充、1.5m、编织线身、锌合金接头","unit":"条","price":32,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-007","name":"颈枕","spec":"记忆棉、U型护颈、可拆洗外套、含收纳袋","unit":"个","price":35,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-008","name":"午睡毯","spec":"法兰绒、120×150cm、可机洗、防静电","unit":"条","price":55,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-009","name":"冰丝袖套","spec":"UPF50+、冰丝凉感、一对装、多色可选","unit":"对","price":37,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-010","name":"护眼台灯","spec":"国AA级照度、无频闪、三档色温、触控调光","unit":"个","price":113,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-011","name":"蓝牙音箱","spec":"IPX5防水、蓝牙5.3、续航12h、重低音振膜","unit":"个","price":223,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-012","name":"毛巾礼盒","spec":"纯棉新疆棉、3条装、34×75cm、礼盒精装","unit":"盒","price":40,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-013","name":"收纳箱","spec":"45L、加厚塑料透明、带万向滑轮、卡扣翻盖","unit":"个","price":50,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-014","name":"吹风机","spec":"1800W、负离子护发、恒温NTC、六档风速、低噪设计","unit":"个","price":112,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-015","name":"手机支架","spec":"折叠伸缩、桌面/床头两用、防滑硅胶垫","unit":"个","price":13,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-016","name":"体脂秤","spec":"蓝牙APP、多指标（体重/体脂/肌肉量）、钢化玻璃、LED隐藏屏","unit":"个","price":267,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-018","name":"冰箱贴","spec":"强力磁吸、3D立体浮雕创意款（5个/套）、直径3.5cm、主题套装","unit":"套","price":14,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-019","name":"速干毛巾","spec":"超细纤维、双面加厚、30×80cm、吸水速干、带挂环","unit":"条","price":14,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-020","name":"瑜伽垫","spec":"TPE材质、加厚6mm、双面防滑纹、183×61cm、含背带+绑带","unit":"条","price":65,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-021","name":"运动水壶","spec":"Tritan材质、700ml、一键弹盖吸嘴、防漏锁扣、宽口易清洗","unit":"个","price":45,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-022","name":"运动腰包","spec":"防水尼龙、大屏手机仓（6.8寸）、夜光反光条、隐形耳机孔","unit":"个","price":50,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-023","name":"沙发护腰靠枕","spec":"记忆棉+凝胶层、人体工学曲面、45×32×58cm、透气网布外套","unit":"个","price":68,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-024","name":"陶瓷餐具套餐","spec":"6件套（汤勺/味碟/碗/盘/马克杯）、釉下彩、微波炉&洗碗机适用","unit":"套","price":105,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-025","name":"电子手表","spec":"带电子屏、支持心血氧监测、防水、磁吸充电","unit":"个","price":309,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-026","name":"智能手环","spec":"AMOLED屏、心率血氧睡眠监测、50米防水、14天续航","unit":"个","price":256,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-027","name":"蓝牙耳机","spec":"半入耳式、IPX4及以上防水防尘、降噪","unit":"对","price":140,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-028","name":"电动牙刷","spec":"声波震动、三档模式、感应充电、IPX7防水","unit":"个","price":137,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-029","name":"电煮锅","spec":"304不锈钢内胆、1.6L、两档功率（300/600W）、不粘煎盘盖","unit":"个","price":96,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-030","name":"便携手持小风扇","spec":"5档强风、1200mAh大电池（续航8h）、折叠支架、数显屏","unit":"个","price":26,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动奖品、培训类奖品","installation":""},{"id":"OP-031","name":"电动车挡风被-夏款","spec":"春秋薄款、防晒涂层、防雨绸面料、反光条、通用电瓶车","unit":"个","price":34,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-032","name":"电动车挡风被-冬款","spec":"冬季加厚（仿兔毛内层）、防泼水、加宽护肩护把、可拆洗","unit":"个","price":52,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-033","name":"腰靠","spec":"办公室用、记忆棉、聚酯纤维外套材质","unit":"个","price":65,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-034","name":"恒温壶/养生壶","spec":"1.5L、智能多段恒温（40/60/80/100℃）、高硼硅玻璃、防干烧","unit":"个","price":125,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-035","name":"床上用品四件套","spec":"100%纯棉、1.5m床（被套200×230cm）","unit":"套","price":160,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"培训类奖品","installation":""},{"id":"OP-036","name":"垃圾袋","spec":"绳式、黑色、45*50cm*100只","unit":"包","price":9,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"便民/活动后勤（活动物料）","installation":""},{"id":"OP-037","name":"一次性雨衣","spec":"一次性雨衣 加厚PEVA 成人 全身 含帽 均码","unit":"个","price":8,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"便民/应急（活动物料）","installation":""},{"id":"OP-038","name":"螺丝刀套装","spec":"螺丝刀套装 多功能 26合1 铬钒钢 磁吸头","unit":"套","price":38,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"便民服务（活动物料）","installation":""},{"id":"OP-039","name":"指甲刀套装","spec":"指甲刀套装 不锈钢 8件套 皮质包","unit":"套","price":59,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"便民服务（活动物料）","installation":""},{"id":"OP-040","name":"插线板","spec":"插线板 3位5孔 1.8m 防雷防过载 新国标","unit":"个","price":40,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"便民物资（活动物料）","installation":""},{"id":"OP-041","name":"衣架","spec":"衣架 10支装 塑料 防滑 加厚","unit":"套","price":5.58,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"便民物资（活动物料）","installation":""},{"id":"OP-042","name":"针线包","spec":"针线包 便携 12色线 含剪刀/顶针","unit":"套","price":16,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"便民物资（活动物料）","installation":""},{"id":"OP-043","name":"跳绳","spec":"PVC计数跳绳 2.8m 电子计数表头 轴承顺滑 长短可调 成人/儿童通用","unit":"个","price":27,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动打卡（活动物料）","installation":""},{"id":"OP-044","name":"毽子","spec":"鹅毛毽 手工缝制 橡胶底座 高约20cm 标准比赛款","unit":"个","price":6,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"传统运动（活动物料）","installation":""},{"id":"OP-045","name":"羽毛球拍","spec":"碳素纤维羽毛球拍 对拍已穿线 进攻型 约85g/支 含拍套","unit":"支","price":119,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-046","name":"羽毛球","spec":"鹅毛羽毛球 比赛级 12只/筒","unit":"筒","price":77,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-047","name":"乒乓球拍","spec":"乒乓球拍 双面反胶 横直两用 含套胶 成品拍","unit":"支","price":85,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-048","name":"乒乓球","spec":"乒乓球 三星 赛璐珞/ABS 一盒6只","unit":"盒","price":22,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-049","name":"篮球","spec":"篮球 7号标准 丁基内胆 PU耐磨 室内外通用","unit":"个","price":117,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动竞技（活动物料）","installation":""},{"id":"OP-050","name":"桌游套装","spec":"桌游套装 防水卡牌 含狼人杀/UNO/剧本杀等 10款混装","unit":"套","price":109,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"青年社交（活动物料）","installation":""},{"id":"OP-051","name":"扑克牌","spec":"扑克牌 防水PVC塑料 标准54张 含2张鬼牌","unit":"套","price":9,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-052","name":"象棋","spec":"象棋 磁吸折叠棋盘 实木棋子 40mm 含收纳","unit":"套","price":52,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-053","name":"围棋","spec":"围棋 磁性便携折叠棋盘 19路 含云子棋子 361子","unit":"套","price":70,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-054","name":"五子棋","spec":"五子棋 磁性便携 含棋子 可折叠棋盘","unit":"套","price":33,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-055","name":"魔方","spec":"魔方 三阶速拧 磁力定位 比赛级 含底座","unit":"个","price":22,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-056","name":"乐高积木","spec":"积木 基础颗粒 中盒 500+件 兼容乐高","unit":"套","price":37,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子搭建（活动物料）","installation":""},{"id":"OP-057","name":"儿童绘本","spec":"儿童绘本 A4精装全彩 分龄绘本套装 10册/套","unit":"套","price":36,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子阅读（活动物料）","installation":""},{"id":"OP-058","name":"马克笔","spec":"马克笔 24色双头 酒精性 可叠色 含笔袋","unit":"套","price":25,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"绘画活动（活动物料）","installation":""},{"id":"OP-059","name":"水彩颜料","spec":"水彩颜料 12色固体套装 含画笔/笔洗 便携","unit":"套","price":19,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"绘画活动（活动物料）","installation":""},{"id":"OP-060","name":"素描纸","spec":"素描纸 A3 100张/包 180g 双面可用","unit":"包","price":31,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"绘画（活动物料）","installation":""},{"id":"OP-061","name":"彩色卡纸","spec":"彩色卡纸 A4 100张/包 120g 十色混装","unit":"包","price":13,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工（活动物料）","installation":""},{"id":"OP-062","name":"安全剪刀","spec":"安全剪刀 圆头儿童 不锈钢刀刃 手工专用 2把/组","unit":"把","price":8,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工（活动物料）","installation":""},{"id":"OP-063","name":"固体胶","spec":"固体胶 PVP 大容量 21g/支 速干","unit":"支","price":3,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工粘贴（活动物料）","installation":""},{"id":"OP-064","name":"折纸材料包","spec":"折纸材料包 15cm 100张 多色 含教程","unit":"包","price":5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工折纸（活动物料）","installation":""},{"id":"OP-065","name":"超轻黏土","spec":"超轻黏土 24色 无毒 不粘手 可晾干 500g/套","unit":"套","price":34,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子手工（活动物料）","installation":""},{"id":"OP-066","name":"圆形气球","spec":"圆形气球 100只/包 混色 加厚乳胶 可充气 5/10/12寸","unit":"包","price":24,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"装饰/游戏（活动物料）","installation":""},{"id":"OP-067","name":"抽奖箱","spec":"抽奖箱 亚克力透明 双格 含100小球 30x30x30cm","unit":"套","price":67.79,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"互动抽奖（活动物料）","installation":""},{"id":"OP-068","name":"幸运转盘","spec":"幸运转盘 60cm 指针可书写 含支架","unit":"个","price":64,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"互动抽奖（活动物料）","installation":""},{"id":"OP-069","name":"计分牌","spec":"计分牌 翻分牌 0-99 双面 便携","unit":"个","price":19,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"竞技活动（活动物料）","installation":""},{"id":"OP-070","name":"秒表","spec":"秒表 电子 100组记忆 防水 含挂绳","unit":"个","price":69,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"竞技计时（活动物料）","installation":""},{"id":"OP-071","name":"口哨","spec":"口哨 不锈钢裁判哨 含珠 高分贝 含挂绳","unit":"个","price":10,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"裁判/组织（活动物料）","installation":""},{"id":"OP-072","name":"号码布","spec":"号码布 1-50号 防水 含别针 每套50张","unit":"套","price":78,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"比赛分组（活动物料）","installation":""},{"id":"OP-073","name":"团队袖标","spec":"团队袖标 10条/包 红蓝分队 魔术贴 成人通用","unit":"包","price":36,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"团队分组（活动物料）","installation":""},{"id":"OP-074","name":"眼罩","spec":"眼罩 冰丝遮光 松紧可调节 成人通用","unit":"个","price":14,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"互动游戏（活动物料）","installation":""},{"id":"OP-075","name":"绑腿带","spec":"绑腿带 魔术贴宽绑带 双人三足 含护腿垫","unit":"个","price":6,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"团队协作游戏（活动物料）","installation":""},{"id":"OP-076","name":"趾压板","spec":"趾压板 EVA拼接 防滑 指压 含收纳袋","unit":"个","price":41,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"互动挑战（活动物料）","installation":""},{"id":"OP-077","name":"钓鱼玩具","spec":"钓鱼玩具 磁吸 儿童 含竿2支/鱼10条","unit":"套","price":40,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子游戏（活动物料）","installation":""},{"id":"OP-078","name":"沙包","spec":"沙包 棉布 五谷填充 100g/个 3个/套","unit":"套","price":11,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"传统游戏（活动物料）","installation":""},{"id":"OP-079","name":"套圈玩具","spec":"套圈玩具 塑料圈 10只 含立柱5根 可折叠","unit":"套","price":26,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"互动游戏（活动物料）","installation":""},{"id":"OP-080","name":"飞行棋","spec":"飞行棋 防水棋盘 经典款 含棋子/骰子","unit":"套","price":34,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子/益智（活动物料）","installation":""},{"id":"OP-081","name":"跳棋","spec":"跳棋 玻璃珠 防水收纳盒 含棋盘","unit":"套","price":16,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子/益智（活动物料）","installation":""},{"id":"OP-082","name":"阿瓦隆","spec":"阿瓦隆 防水卡牌 标准版 含角色牌/规则说明书","unit":"套","price":61,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"阵营推理（活动物料）","installation":""},{"id":"OP-083","name":"UNO","spec":"UNO纸牌 防水 108张 标准版 含说明书","unit":"套","price":10,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子互动（活动物料）","installation":""},{"id":"OP-084","name":"狼人杀卡牌","spec":"狼人杀卡牌 防水 含身份牌/法官手册 标准版","unit":"套","price":8,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"推理社交（活动物料）","installation":""},{"id":"OP-085","name":"三国杀","spec":"三国杀 防水卡牌 标准版 含武将牌/身份牌 暗金豪华版","unit":"套","price":51,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"策略卡牌（活动物料）","installation":""},{"id":"OP-086","name":"谁是卧底","spec":"谁是卧底 防水卡牌 含词库 500词 标准版","unit":"套","price":19,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"语言推理（活动物料）","installation":""},{"id":"OP-087","name":"大富翁桌游","spec":"大富翁 防水棋盘 含骰子/道具卡 标准版","unit":"套","price":68,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"财商模拟（活动物料）","installation":""},{"id":"OP-088","name":"德国心脏病","spec":"德国心脏病 防水卡牌 含铃铛 标准版","unit":"套","price":44,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"反应力游戏（活动物料）","installation":""},{"id":"OP-089","name":"达芬奇密码","spec":"达芬奇密码 防水卡牌 木质数字牌 标准版","unit":"套","price":42,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"逻辑推理（活动物料）","installation":""},{"id":"OP-090","name":"行动代号","spec":"行动代号 防水卡牌 双人版 含图卡/词卡","unit":"套","price":42,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"词语联想（活动物料）","installation":""},{"id":"OP-091","name":"矮人矿工","spec":"矮人矿工 防水卡牌 身份推理 标准版","unit":"套","price":51,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"身份推理（活动物料）","installation":""},{"id":"OP-092","name":"真心话大冒险","spec":"真心话大冒险 防水卡牌 成人版 100张","unit":"套","price":19,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"破冰互动（活动物料）","installation":""},{"id":"OP-093","name":"害你在心口难开","spec":"害你在心口难开 防水卡牌 爆笑互动 100张","unit":"套","price":24,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"爆笑互动（活动物料）","installation":""},{"id":"OP-094","name":"妙语说书人","spec":"妙语说书人 防水卡牌 含图卡84张 正版","unit":"套","price":76,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"创意表达（活动物料）","installation":""},{"id":"OP-095","name":"卡坦岛","spec":"卡坦岛 桌游 基础版 正版 含版图/资源卡，基础版红盒/海洋版蓝盒","unit":"套","price":157,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"策略桌游（活动物料）","installation":""},{"id":"OP-096","name":"呼啦圈","spec":"呼啦圈 加厚PVC 90cm 可拆卸 可调重量","unit":"个","price":37,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动健身（活动物料）","installation":""},{"id":"OP-097","name":"拔河绳","spec":"拔河绳 尼龙编织 30m 直径3cm 含防滑握把","unit":"条","price":224,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"团队竞技（活动物料）","installation":""},{"id":"OP-098","name":"接力棒","spec":"接力棒 铝合金 塑胶握把 标准田径款 4支/套","unit":"套","price":9,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"田径运动（活动物料）","installation":""},{"id":"OP-099","name":"弹力球","spec":"弹力球 橡胶 直径6cm 高弹 3个/组","unit":"组","price":8,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子游戏（活动物料）","installation":""},{"id":"OP-100","name":"泡沫棒","spec":"泡沫棒 EVA 加长款 60cm 安全软质","unit":"根","price":1.5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"趣味对抗（活动物料）","installation":""},{"id":"OP-101","name":"障碍锥桶","spec":"障碍锥桶 PVC 50cm 反光条 可叠放 含底座","unit":"个","price":20,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"体能挑战（活动物料）","installation":""},{"id":"OP-102","name":"投壶套装","spec":"投壶套装 木质壶1+箭10支 传统款 含收纳","unit":"套","price":46,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"传统游戏（活动物料）","installation":""},{"id":"OP-103","name":"磁吸飞镖盘","spec":"磁吸飞镖盘 双面磁性 含飞镖6支 40cm","unit":"套","price":32,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"竞技游戏（活动物料）","installation":""},{"id":"OP-104","name":"桌面冰壶","spec":"桌面冰壶 迷你套装 含壶石8/赛道 可玩","unit":"套","price":69,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"趣味竞技（活动物料）","installation":""},{"id":"OP-105","name":"保龄球套装","spec":"保龄球套装 塑料球+瓶10 可立 便携款","unit":"套","price":57,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"趣味运动（活动物料）","installation":""},{"id":"OP-106","name":"泡泡机","spec":"泡泡机 电动自动出泡 大容量 含泡泡液","unit":"个","price":33,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"氛围互动（活动物料）","installation":""},{"id":"OP-107","name":"风筝","spec":"风筝 加厚尼龙 三角款 含线轮 1.2m","unit":"套","price":13,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"户外运动（活动物料）","installation":""},{"id":"OP-108","name":"陀螺","spec":"陀螺 木质传统 拉绳启动 直径8cm","unit":"个","price":13,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"传统游戏（活动物料）","installation":""},{"id":"OP-109","name":"荧光棒","spec":"荧光棒 发光儿童款 多色 100支/包","unit":"包","price":50,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"夜间活动（活动物料）","installation":""},{"id":"OP-110","name":"腰旗橄榄球套装","spec":"腰旗橄榄球套装 腰旗6条+软球1+规则卡 团队款","unit":"套","price":89,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"团队运动（活动物料）","installation":""},{"id":"OP-111","name":"滑板","spec":"滑板 枫木双翘 入门级 含护具套装 8寸","unit":"套","price":76,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"潮流运动（活动物料）","installation":""},{"id":"OP-112","name":"瑜伽球","spec":"瑜伽球 65cm 加厚防爆 含气筒/收纳袋","unit":"个","price":39,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动健身（活动物料）","installation":""},{"id":"OP-113","name":"握力器","spec":"握力器 可调节 计数 不锈钢 5-60kg","unit":"个","price":21,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"健身互动（活动物料）","installation":""},{"id":"OP-114","name":"腕力球","spec":"腕力球 自启动 陀螺仪 含防甩绳","unit":"个","price":35,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"健身互动（活动物料）","installation":""},{"id":"OP-115","name":"电子飞镖靶","spec":"电子飞镖靶 磁性软头 含镖6支 自动计分","unit":"套","price":86,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"竞技游戏（活动物料）","installation":""},{"id":"OP-116","name":"桌面足球","spec":"桌面足球 台式对战 含小球2 台面型","unit":"套","price":77,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"趣味竞技（活动物料）","installation":""},{"id":"OP-117","name":"沙壶球","spec":"沙壶球 桌面 含球杆2+壶球 木质","unit":"套","price":105,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"趣味竞技（活动物料）","installation":""},{"id":"OP-118","name":"平衡板","spec":"平衡板 木质 平衡训练 防滑 承重120kg","unit":"个","price":60,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"运动健身（活动物料）","installation":""},{"id":"OP-120","name":"拉力器","spec":"拉力器 弹力绳 多档阻力 含握把","unit":"个","price":29,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"健身互动（活动物料）","installation":""},{"id":"OP-121","name":"弹力圈","spec":"弹力圈 乳胶 多档阻力 3条/套","unit":"套","price":33,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"健身互动（活动物料）","installation":""},{"id":"OP-122","name":"旱地冰壶套装","spec":"旱地冰壶套装 仿真冰道 含壶石8 可折叠","unit":"套","price":176,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"趣味竞技（活动物料）","installation":""},{"id":"OP-125","name":"拼图","spec":"拼图 1000片 风景/名画 精装 含图纸","unit":"盒","price":31,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-126","name":"叠叠高","spec":"叠叠高 实木54块 精装 含骰子","unit":"套","price":43,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-127","name":"便携麻将","spec":"便携麻将 树脂 折叠棋盘 含骰子 旅行款 144张","unit":"副","price":108,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-128","name":"孔明锁","spec":"孔明锁 木质鲁班锁 六根 益智 含解法图","unit":"个","price":35,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-129","name":"九连环","spec":"九连环 金属 传统益智 含解法图","unit":"个","price":33,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-130","name":"华容道","spec":"4阶华容道 滑块 木质 经典款 含说明","unit":"个","price":44.2,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-131","name":"大话骰盅","spec":"大话骰盅 树脂 5骰+骰盅 含杯","unit":"套","price":5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"桌游互动（活动物料）","installation":""},{"id":"OP-132","name":"你画我猜卡","spec":"你画我猜卡 防水词卡 200张 双面 含笔板","unit":"套","price":60,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"破冰互动（活动物料）","installation":""},{"id":"OP-133","name":"猜歌名卡","spec":"猜歌名卡 防水曲目卡 蓝牙播放 含音箱（100张）","unit":"套","price":41,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"音乐互动（活动物料）","installation":""},{"id":"OP-134","name":"词语接龙卡","spec":"词语接龙卡 防水词库卡 200张","unit":"套","price":32,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"语言游戏（活动物料）","installation":""},{"id":"OP-135","name":"多米诺骨牌","spec":"多米诺骨牌 木质 1000片 含摆推器","unit":"套","price":120,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-136","name":"磁力片","spec":"磁力片 100片 益智拼搭 含卡片 兼容款","unit":"套","price":72,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子搭建（活动物料）","installation":""},{"id":"OP-137","name":"3D立体拼图","spec":"3D立体拼图 纸质建筑模型 含胶水 尺寸30cm+","unit":"套","price":68.875,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子手工（活动物料）","installation":""},{"id":"OP-138","name":"数字油画","spec":"数字油画 40x50cm 含画笔/颜料/画框","unit":"套","price":31,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"绘画活动（活动物料）","installation":""},{"id":"OP-139","name":"沙画套装","spec":"沙画套装 彩色沙 10色 含画框3幅","unit":"套","price":87.12,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子手工（活动物料）","installation":""},{"id":"OP-140","name":"羊毛毡材料包","spec":"羊毛毡材料包 基础戳戳乐 含针/垫 10款","unit":"套","price":35,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-141","name":"钻石画","spec":"钻石画 满钻 30x40cm 含点钻笔/胶盘","unit":"套","price":36,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-142","name":"儿童显微镜","spec":"儿童显微镜 100-1200倍 含标本片 便携","unit":"个","price":56,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"科学探索（活动物料）","installation":""},{"id":"OP-143","name":"儿童望远镜","spec":"儿童望远镜 8x21 橡胶目镜 防摔","unit":"个","price":110,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"户外探索（活动物料）","installation":""},{"id":"OP-144","name":"发光地球仪","spec":"发光地球仪 LED触控 中英双语 直径25cm","unit":"个","price":183,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"科普教育（活动物料）","installation":""},{"id":"OP-145","name":"STEM科学实验套装","spec":"STEM科学实验套装 物理化学 安全材料 30+实验","unit":"套","price":133,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"科学探索（活动物料）","installation":""},{"id":"OP-146","name":"蒙眼贴鼻子套装","spec":"蒙眼贴鼻子套装 加厚纸板 含眼罩+鼻子贴 90cm","unit":"套","price":31,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"互动游戏（活动物料）","installation":""},{"id":"OP-148","name":"桌面抓娃娃机","spec":"桌面抓娃娃机 迷你电动 含公仔10 充电款","unit":"个","price":120,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"趣味互动（活动物料）","installation":""},{"id":"OP-149","name":"解压捏捏乐","spec":"解压捏捏乐 TPR慢回弹 多造型 12个/盒","unit":"盒","price":44,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"解压互动（活动物料）","installation":""},{"id":"OP-150","name":"指尖陀螺","spec":"指尖陀螺 金属 轴承 减压 含指套","unit":"个","price":17,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"解压互动（活动物料）","installation":""},{"id":"OP-152","name":"糖果类（含口香糖）","spec":"硬糖/棒棒糖/棉花糖/口香糖 混合口味 袋装（500g/袋）","unit":"袋","price":24,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-153","name":"巧克力/能量食品","spec":"巧克力/能量棒 独立包装 混装（500g/袋）","unit":"袋","price":27,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-154","name":"饼干/糕点","spec":"夹心饼干/派/苏打饼干/沙琪玛 多口味混装（约20小包）500g/袋","unit":"袋","price":19,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-155","name":"膨化食品","spec":"薯片/米饼/爆米花 多味混装（5~6g/包）50包/袋","unit":"袋","price":27,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-156","name":"坚果炒货","spec":"瓜子/每日坚果 独立小包（20g*12包）/袋","unit":"袋","price":36,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-157","name":"蜜饯果干","spec":"话梅 九制/西梅/雪梅 多口味散装 500g/袋","unit":"袋","price":26,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-158","name":"海苔","spec":"海苔 原味/芝麻/坚果 多味混装（1.5g/包）24包/袋","unit":"袋","price":33,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-159","name":"辣条","spec":"辣条 大面筋/亲嘴烧/小面筋 混装 1000g/袋","unit":"袋","price":34,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-160","name":"果冻","spec":"吸吸果冻 混合口味 30支/箱","unit":"支","price":16,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"儿童零食（活动物料）","installation":""},{"id":"OP-161","name":"零食大礼包","spec":"综合混装 1000g/箱","unit":"箱","price":89,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"茶歇零食（活动物料）","installation":""},{"id":"OP-162","name":"碳酸饮料（可乐）","spec":"可乐 330ml罐装 经典/无糖 混装","unit":"罐","price":3,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-163","name":"气泡水","spec":"气泡水 480ml瓶装 白桃/青瓜/白草莓 混装","unit":"瓶","price":4.5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-164","name":"茶饮料","spec":"柠檬茶/红茶/无糖茶 瓶装 混装","unit":"瓶","price":5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-165","name":"凉茶","spec":"凉茶 310ml罐装","unit":"罐","price":3,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-166","name":"椰子饮品","spec":"植物蛋白椰汁 245ml罐装","unit":"罐","price":5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动饮品（活动物料）","installation":""},{"id":"OP-167","name":"乳饮料","spec":"复原乳/调制乳 盒装","unit":"盒","price":2.5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"儿童活动饮品（活动物料）","installation":""},{"id":"OP-168","name":"饮用水","spec":"天然水 550ml×24瓶/箱","unit":"瓶","price":1.5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动用水（活动物料）","installation":""},{"id":"OP-169","name":"功能/运动饮料","spec":"能量/电解质/运动饮料 罐装瓶装 混装","unit":"瓶","price":5,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"能量补给（活动物料）","installation":""},{"id":"OP-170","name":"毛绒公仔","spec":"中号 软体 多款","unit":"个","price":42,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"亲子互动（活动物料）","installation":""},{"id":"OP-173","name":"热缩片材料包","spec":"透明热缩片 含画笔/烤箱纸 DIY","unit":"套","price":105,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-175","name":"蜡烛DIY套件","spec":"果冻蜡/香薰蜡 含模具","unit":"套","price":49,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-176","name":"干花材料包","spec":"压花/干花 书签制作","unit":"套","price":43,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-177","name":"剪纸材料包","spec":"红色宣纸 含图样/剪刀","unit":"套","price":25,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"传统手工（活动物料）","installation":""},{"id":"OP-178","name":"衍纸材料包","spec":"彩色纸条 含卷纸笔","unit":"套","price":20,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-179","name":"不织布材料包","spec":"贴画/挂件 含针线","unit":"套","price":57,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-180","name":"手账材料包","spec":"贴纸/胶带/印章 混装","unit":"套","price":21,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-181","name":"木质拼装","spec":"拼装小车/模型 木工DIY","unit":"套","price":18,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"手工DIY（活动物料）","installation":""},{"id":"OP-182","name":"扎染材料包","spec":"染料/白布/皮筋 传统","unit":"套","price":44,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"传统手工（活动物料）","installation":""},{"id":"OP-183","name":"军棋","spec":"磁性 折叠棋盘 实木棋子","unit":"副","price":40,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-184","name":"国际象棋","spec":"磁性 折叠 实木","unit":"副","price":41,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-185","name":"数独","spec":"磁性 便携 含题卡","unit":"套","price":50,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-186","name":"七巧板","spec":"木质 经典 益智","unit":"套","price":8,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-187","name":"汉诺塔","spec":"木质 益智 含解法","unit":"套","price":40,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-188","name":"金字塔魔方","spec":"四阶 磁力 比赛级","unit":"个","price":45,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"益智挑战（活动物料）","installation":""},{"id":"OP-189","name":"桥牌","spec":"标准版 含计分卡","unit":"副","price":19,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"棋牌活动（活动物料）","installation":""},{"id":"OP-190","name":"无线话筒","spec":"便携 扩音 UHF 双麦","unit":"套","price":117,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动音响（活动物料）","installation":""},{"id":"OP-191","name":"书法套装","spec":"文房四宝 毛笔/墨/砚/水写布","unit":"套","price":40,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"才艺文化（活动物料）","installation":""},{"id":"OP-192","name":"宣纸","spec":"生宣 四尺 一刀100张","unit":"刀","price":24,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"才艺文化（活动物料）","installation":""},{"id":"OP-193","name":"彩旗/三角旗","spec":"10m 成串 多色","unit":"串","price":8,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"节日氛围（活动物料）","installation":""},{"id":"OP-194","name":"拉花/彩带","spec":"装饰 多色 成卷 90m/卷","unit":"卷","price":18,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"节日氛围（活动物料）","installation":""},{"id":"OP-196","name":"拍照道具","spec":"相框/眼镜/ins牌 打卡","unit":"套","price":25,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"拍照打卡（活动物料）","installation":""},{"id":"OP-197","name":"LED灯串","spec":"10m 电池款 暖光 防水","unit":"串","price":24,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"氛围布置（活动物料）","installation":""},{"id":"OP-198","name":"一次性纸杯","spec":"加厚 中号 100只/包","unit":"包","price":22,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"活动后勤（活动物料）","installation":""},{"id":"OP-199","name":"折叠椅","spec":"户外 铝合金 便携 承重150kg","unit":"把","price":87,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"户外露营（活动物料）","installation":""},{"id":"OP-200","name":"折叠桌","spec":"铝合金 便携 120cm","unit":"张","price":117,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"户外露营（活动物料）","installation":""},{"id":"OP-201","name":"野餐垫","spec":"加厚 防潮 2m×2m","unit":"张","price":46,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"户外露营（活动物料）","installation":""},{"id":"OP-202","name":"天幕/遮阳棚","spec":"3m×3m 防晒防雨","unit":"顶","price":110,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"户外露营（活动物料）","installation":""},{"id":"OP-203","name":"一次性桌布","spec":"加厚 大号 防水\n适配长120*宽60cm长桌 10只/包","unit":"包","price":13,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动后勤（活动物料）","installation":""},{"id":"OP-204","name":"帆布袋","spec":"活动定制 棉麻 手提\n宽约35cm高约38cm","unit":"个","price":18,"supplier":"运营物资供应商（演示）","category":"社群活动物资","demoOnly":false,"note":"活动伴手（活动物料）","installation":""},{"id":"OP-205","name":"活性炭包","spec":"6kg装、高效除甲醛除异味、可晾晒重复使用","unit":"盒","price":47,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-206","name":"杀虫剂喷雾","spec":"500ml、无香型、广谱杀虫（蟑螂/蚂蚁/蚊蝇）","unit":"瓶","price":20,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-207","name":"杀蟑饵剂","spec":"8个装、连锁灭蟑、胶饵诱杀、长效防潮","unit":"包","price":23,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-208","name":"地漏过滤网","spec":"50片装、一次性粘贴式、细密网格防堵","unit":"包","price":8,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-209","name":"桌椅静音脚套保护套","spec":"16个装、方圆通用款、加厚硅胶/毛毡材质、防滑耐磨、静音防刮、适用桌椅沙发脚","unit":"份","price":7,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"租户居住体验提升。可以隔音，提供给上下楼或隔壁因噪音投诉的租户","installation":""},{"id":"OP-210","name":"挡水条","spec":"20mm厚*30mm宽*1米长、加厚实心橡胶/PVC、可裁剪、防霉防滑、免打孔安装","unit":"份","price":12.8,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"卫生间狭小，水流容易外溢，挡水条可以加在卫生间门口挡水","installation":""},{"id":"OP-211","name":"公寓的防撞条","spec":"L型二代加厚款、米色15mm厚、4米/卷、免贴胶自粘","unit":"份","price":14,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"安全防护提示","installation":""},{"id":"OP-212","name":"吸音棉","spec":"110型、2cm厚×1米宽、自粘式、环保阻燃、隔音降噪","unit":"份","price":19,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"隔音处理","installation":""},{"id":"OP-213","name":"雪糕筒","spec":"高650mm、宽310mm、橡胶/塑料材质、带反光条","unit":"个","price":19,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"临时隔离或警示","installation":""},{"id":"OP-214","name":"防摔蚊帐","spec":"1.5m床适用（150×200cm）、全包围防摔、U型拉链门","unit":"份","price":191,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-215","name":"沙发布","spec":"180*260cm、四季通用、A类面料、可机洗","unit":"条","price":80,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"租户居住体验提升。用于退租后的轻微破损沙发遮盖","installation":""},{"id":"OP-216","name":"空调挡板","spec":"挂机通用、无孔一体式安装、可调节风向、防直吹","unit":"件","price":27,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"客房装饰或功能性用品","installation":""},{"id":"OP-217","name":"折叠平板手推车","spec":"90×60cm、承重900斤、折叠便携","unit":"台","price":179,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"租户居住体验提升","installation":""},{"id":"OP-218","name":"应急药品箱","spec":"急救包套装（含全套常用药品及器械）、家用医疗标准配置，12种急救用品组合","unit":"个","price":77,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"安全应急","installation":""},{"id":"OP-219","name":"钥匙箱","spec":"24位铝合金钥匙箱、带锁壁挂式、透明视窗","unit":"个","price":50,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"钥匙管理","installation":""},{"id":"OP-220","name":"入户地垫","spec":"深灰色、120×240cm、PVC/橡胶底防滑、耐磨除尘","unit":"份","price":232,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"公共区域清洁","installation":""},{"id":"OP-221","name":"除胶剂","spec":"强力去胶通用型、除不干胶/标签残胶、开荒保洁专用，450ml","unit":"瓶","price":17.7,"supplier":"运营物资供应商（演示）","category":"客诉维护物资","demoOnly":false,"note":"清洁维护","installation":""},{"id":"AD-001","name":"户外喷绘布","spec":"530g/㎡ 户外喷绘布（“530”为克重），720dpi 高清喷绘","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-002","name":"灯箱画面","spec":"高清软膜灯箱布，1440dpi（布基灯箱片，不含型材/光源）","unit":"㎡","price":180,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-003","name":"刀刮布","spec":"户外防水刀刮布，1440dpi","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-004","name":"网格布","spec":"户外网格喷绘布","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-005","name":"室内写真背胶","spec":"高清写真背胶，1440dpi","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-006","name":"户外写真背胶","spec":"户外防水写真背胶，1440dpi","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-007","name":"可移车贴","spec":"户外可移车贴，1440dpi","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-008","name":"单透贴","spec":"单向透视贴，1440dpi","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-009","name":"透明贴","spec":"PET透明膜彩印（基材PET，厚度0.1–0.15mm）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-010","name":"磨砂玻璃贴","spec":"磨砂膜刻绘","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-011","name":"专用防滑地贴","spec":"地面专用防滑耐磨地贴膜＋UV彩印，适用于室内平整地面","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-012","name":"UV软膜","spec":"UV写真软膜，1440dpi（软膜基材，不含型材/光源）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-013","name":"自动扶梯侧板广告贴","spec":"户外耐磨可移除PVC广告膜＋高清写真覆保护膜（建议注明标准尺寸区间，如高×宽）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-014","name":"KT板写真展板","spec":"5mm KT板＋单面写真","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-015","name":"PVC写真标牌","spec":"5mm PVC发泡板＋单面写真","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-016","name":"PVC双面指示牌","spec":"5mm PVC板＋双面写真","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-017","name":"UV直喷PVC板","spec":"5mm PVC板UV平板喷印","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-018","name":"亚克力标牌","spec":"5mm亚克力板UV直喷（明确工艺，取消“或贴画”）","unit":"㎡","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-019","name":"房源招租展示牌","spec":"5mm PVC发泡板＋高清写真，60×90cm","unit":"块","price":90,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-020","name":"易拉宝","spec":"80×200cm，铝合金架＋写真画面","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-021","name":"丽屏展架","spec":"80×180cm，铝合金立式展示框，含PP写真画面","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-022","name":"人字板（A字展架）","spec":"60×90cm，铝合金折叠架＋双面5mm PVC广告画面","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-023","name":"拉网展架","spec":"3×2.3m，金属架＋写真画面","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-024","name":"立式展示牌","spec":"A3，画面＋支架","unit":"个","price":90,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-025","name":"桌面台卡","spec":"A4，透明台卡","unit":"个","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-026","name":"条幅横幅","spec":"常规红布/喷绘横幅","unit":"米","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-027","name":"吊旗","spec":"写真画面＋上下杆，约1.5×0.6m","unit":"套","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-028","name":"电梯地毯","spec":"5mm（±0.5）阻燃耐磨圈绒毯面＋防滑底背，四周包边，按轿厢尺寸裁切（典型轿厢1.4×1.4–1.6×1.6m，需注明）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-029","name":"宣传单页","spec":"A4，128g铜版纸，双面彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-030","name":"DM折页","spec":"A4，157g铜版纸，双面彩印、折页","unit":"份","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-031","name":"宣传折页手册","spec":"成品尺寸10×21cm（展开尺寸另注），157g铜版纸，6折页双面彩印","unit":"份","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-032","name":"不干胶贴纸","spec":"不干胶彩印（建议按㎡计价；或注明常用尺寸如10×10cm、最大尺寸A3）","unit":"张","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-033","name":"纸质宣传吊牌","spec":"28×13cm，240g铜版纸彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-034","name":"POP展示卡","spec":"62.5×42.8cm，300g铜版纸彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-035","name":"纸质海报","spec":"A2，200g铜版纸，单面彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-036","name":"房源信息展示卡","spec":"A5，250g铜版纸，双面彩印","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-037","name":"租客服务联系卡","spec":"90×54mm，300g铜版纸，双面彩印（企业微信二维码位）","unit":"张","price":15,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-038","name":"入住指引卡","spec":"A5，200g铜版纸，双面彩印","unit":"张","price":15,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-039","name":"邀请函/贺卡","spec":"A5，250g铜版纸，双面彩印、压痕对折","unit":"张","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-040","name":"证书/聘书（含封套）","spec":"A4，绒面证书封套＋200g内页彩印","unit":"套","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-041","name":"手提宣传袋","spec":"250g白卡纸，四色印刷，30×40×8cm","unit":"个","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-042","name":"员工工卡","spec":"标准IC卡尺寸85.6×54mm，0.76mm白色PVC卡，双面彩色印刷（姓名、照片等）","unit":"张","price":15,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-043","name":"工卡挂绳","spec":"15mm涤纶织带，双面热转印品牌标识，安全脱扣","unit":"套","price":15,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-044","name":"锦旗","spec":"80×120cm，绒布（明确材质，去掉“或棉布”），印制文字及流苏","unit":"条","price":65,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-045","name":"活动抽奖箱","spec":"35×35×35cm，5mm PVC板彩色裱画，顶部投入口","unit":"个","price":65,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-046","name":"活动抽奖转盘","spec":"直径60cm（±2），金属支架＋PVC印刷转盘","unit":"套","price":65,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-047","name":"金属奖牌","spec":"直径约6cm，合金材质，定制图文，含挂带","unit":"个","price":65,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-048","name":"奖杯","spec":"高度25cm（±1），树脂/水晶组合奖杯，含刻字牌","unit":"个","price":65,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-049","name":"活动侧旗/刀旗","spec":"50×180cm，经编涤纶旗帜布双面热转印（注明布料），含3m金属立杆及底座","unit":"套","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-050","name":"活动折叠帐篷","spec":"3×3m，铝合金骨架＋防水牛津布顶棚，品牌单色印制","unit":"套","price":90,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-051","name":"活动桌布","spec":"180×140cm（±2），涤纶布（注明克重如210g）热转印品牌标识","unit":"块","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-052","name":"桁架租赁（含搭拆）","spec":"铝合金桁架背景架（含搭拆），按套/米计价，避免与序号63–65安装服务重复","unit":"㎡","price":120,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含现场搭建及拆除"},{"id":"AD-053","name":"定制纸巾盒","spec":"18×12×9.5cm、ABS盒体＋木纹饰面顶盖、正面印制品牌LOGO","unit":"个","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-054","name":"卡布灯箱（含光源）","spec":"铝型材6–8cm箱体、LED光源（注明色温/防水等级）＋UV软膜画面（整箱含光源）","unit":"㎡","price":180,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-055","name":"桌面海报展示架","spec":"A4，透明亚克力插页式台牌，3mm厚","unit":"个","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"仅送货上门，不含安装"},{"id":"AD-056","name":"室内挂画框","spec":"A2，铝合金边框＋透明保护面板，壁挂式","unit":"套","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-057","name":"壁挂式公告栏","spec":"铝合金边框＋磁性展示背板＋透明保护面板，90×120cm（±2）","unit":"套","price":180,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-058","name":"车库悬挂式导向吊牌","spec":"3mm铝塑板双面UV画面＋金属吊挂件（建议标注标准尺寸如90×120cm，单位与56/58统一）","unit":"㎡","price":180,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-059","name":"温馨提示牌","spec":"3mm PVC板＋UV彩印，20×30cm","unit":"块","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-060","name":"车库反光导视牌","spec":"1.5mm铝板＋工程级反光膜，40×60cm（±2）","unit":"块","price":35,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-061","name":"不锈钢标识牌","spec":"30×20cm，1mm拉丝不锈钢蚀刻填色","unit":"块","price":180,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-062","name":"门店品牌发光字","spec":"304不锈钢围边＋亚克力面板＋LED光源（注明色温/防水等级），字高30cm（±2，或给范围20–40cm）","unit":"字","price":180,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-063","name":"车库反光贴","spec":"工程级反光膜，UV打印、模切（建议注明常用宽度如10/15cm或按㎡）","unit":"㎡","price":45,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":"含常规现场安装"},{"id":"AD-064","name":"普通安装","spec":"平面物料常规现场张贴及安装","unit":"㎡","price":120,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":""},{"id":"AD-065","name":"高空作业设备","spec":"吊车/升降平台租赁","unit":"天","price":120,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":""},{"id":"AD-066","name":"高空安装人工","spec":"具备高空资质的安装人员","unit":"人/天","price":120,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":""},{"id":"AD-067","name":"现场拆除/维护","spec":"原有广告物料拆除、修复","unit":"㎡","price":120,"supplier":"广告印刷供应商（待确认）","category":"印刷品物料","demoOnly":true,"note":"","installation":""}];
 const STORES=["安居瑞龙苑店","萃云阁店","大浪元芬店","凤凰红坳公园店","荟智苑店","龙华弓村清湖店","民治白石龙店","民治红山店","青年人才｜华章新筑","青年人才|鸣鹿苑南苑","青年人才|颐瑞府","青年人才|颐樾府店","青年人才|阅山境花园","石岩罗租桥头岭店","石岩罗租上新店","石岩罗租社区店","石岩罗租中新店","石岩应人石店","中海寰宇时代店","福厦里店","福永村店","福永福围广生店","福永福围西街店","福永怀德店","福永马山小区店","福永兴围店","机场东店","新桥洪田店","航城宝罗店","航城鹤洲南店","青年人才|产业基地","青年人才|电力花园","青年人才|高新花园","青年人才|鸿栖台","青年人才|科技生态园","青年人才|龙海家园","青年人才|瑞樾府","青年人才|未来之光","深圳湾科技生态园店","未来之光店","西乡流塘店","西乡麻布店","西乡永丰店","新安翻身店","未来之光店7月15后","航城鹤洲东店","福海和平店","福海桥头店","福海塘尾东店","福海塘尾西店","福海新和东店","福海新和西店","机场北店","明汇府店","沙井后亭店","松岗东方店","青年人才|学府朗园","地勘大院店","华强北二店","华强北一店","莲花景田店","岭舍店","梅林店","上沙龙秋店","上沙沙嘴店","上沙塘晏店","石厦新洲店","青年人才|梅山苑二期","青年人才|深康村","坂田岗头店","坂田马蹄山店","布吉大芬店","瀚龙苑店","黄贝岭店","锦龙苑店","精茂花园店","莲塘仙湖店","坪山大万新村店","青年人才|鹏瑞尚府","深南广场店","笋岗店","禧龙苑店","远洋新干线店","招商开元店","青年人才|深南广场店","青年人才|静安府","御龙苑店","青年人才|禧龙苑店","青年人才|招商开元店","青年人才|华章新筑","青年人才|宝龙嘉园"];
-const CATEGORY_ORDER=['奖品礼品','活动及社群物资','日常运营耗材','宣传印刷物料','员工物资'];
+const CATEGORY_ORDER=['社群活动物资','客诉维护物资','印刷品物料'];
 const CATEGORY_META={
-  '奖品礼品':{icon:'🏆',desc:'奖杯、奖牌、锦旗与抽奖物资'},
-  '活动及社群物资':{icon:'🎉',desc:'门店活动、社群互动与现场布置'},
-  '日常运营耗材':{icon:'🧰',desc:'保洁维护、维修与便民耗材'},
-  '宣传印刷物料':{icon:'🖨️',desc:'海报、展架、公告栏、导视标识'},
-  '员工物资':{icon:'🪪',desc:'工卡、挂绳与员工形象物料'}
+  '社群活动物资':{icon:'🎉',short:'社群活动',contract:'运营物资合同',budgetKey:'community',budgetName:'社群活动预算',desc:'运营物资合同 · 使用社群活动预算'},
+  '客诉维护物资':{icon:'🎁',short:'客诉物资',contract:'运营物资合同',budgetKey:'customer',budgetName:'客诉预算',desc:'运营物资合同 · 使用客诉预算'},
+  '印刷品物料':{icon:'🖨️',short:'印刷物料',contract:'印刷品物料合同',budgetKey:'marketing',budgetName:'营销预算',desc:'印刷品物料合同 · 使用营销预算'}
 };
-const STORE_ZONES={'安居瑞龙苑店':'第一战区','萃云阁店':'第一战区','福海和平店':'第二战区','福海桥头店':'第二战区'};
+const STORE_ZONES={"安居瑞龙苑店":"第一战区","萃云阁店":"第一战区","福海和平店":"第二战区","福海桥头店":"第二战区"};
 const zoneOf=(store)=>STORE_ZONES[store]||'';
 module.exports={CATALOG,STORES,CATEGORY_ORDER,CATEGORY_META,STORE_ZONES,zoneOf};
 
 });
 
+__def("data/rules", function (module, exports, require) {
+// 可由运营管理部在「中台操作台」维护的规则默认值（纯数据，H5 与小程序共用）
+// 实际生效值存放在 state.approvalConfig / state.contracts，缺省时回落到这里。
+
+// 门店下单审批规则
+const APPROVAL_DEFAULT = {
+  autoMax: 500,          // 小额上限（元）：≤ 此金额且在预算内的单可批量通过 / 可选免审直发
+  regionMax: 2000,       // 战区终审上限（元）：超过即需运营管理部金额审批
+  splitGuard: true,      // 防拆单：按「近 N 天同门店同科目累计金额」定档
+  splitDays: 3,          // 防拆单统计窗口（天）
+  autoSkipReview: false  // 小额且预算内的单是否免战区审核直接发送供应商（默认关闭）
+};
+
+const APPROVAL_LIMITS = {
+  autoMax: [0, 100000],
+  regionMax: [1, 1000000],
+  splitDays: [1, 31]
+};
+
+// 职能部门采购不设预算，但按供应商合同总额封顶（含运营管理部自采）
+// 演示数据：真实合同编号 / 金额请在中台操作台维护
+const CONTRACTS_DEFAULT = [
+  {
+    id: 'HT-2026-001',
+    supplier: '运营物资供应商（演示）',
+    name: '2026 年度运营物资采购合同（客诉预算 / 社群活动预算）',
+    total: 300000,
+    start: '2026-01-01',
+    end: '2026-12-31',
+    note: ''
+  },
+  {
+    id: 'HT-2026-002',
+    supplier: '广告印刷供应商（待确认）',
+    name: '2026 年度印刷品物料采购合同（营销预算）',
+    total: 150000,
+    start: '2026-01-01',
+    end: '2026-12-31',
+    note: ''
+  }
+];
+
+module.exports = { APPROVAL_DEFAULT, APPROVAL_LIMITS, CONTRACTS_DEFAULT };
+
+});
+
 __def("data/seed", function (module, exports, require) {
 // 演示初始数据：由 data/purchase-demo.sqlite 导出（全部为虚构测试数据）
-const SEED_STATE={"budget":5000,"flex":20000,"baseUsed":1800,"orders":[{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0012","items":[{"id":"AD-048","name":"奖杯","price":65,"supplier":"广告印刷供应商（待确认）","priceType":"原清单未提供价格；系统仅为流程测试设置的虚构演示价（非合同价）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":true,"qty":2,"accepted":0,"reconciled":0}],"total":130,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 16:16:28","createdAt":"2026-11-18T08:16:28.535Z","supplierSentAt":"2026-11-18T08:16:28.535Z","stageStartedAt":"2026-11-18T08:16:28.535Z","supplierRecords":{"广告印刷供应商（待确认）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"id":"SQ-0011","purchaseType":"department","department":"人力资源部","groupId":"DP-20261118034037-11","receivingType":"office","store":"公司总部","zone":"总部","manager":"部门测试采购员：人力资源部","submittedBy":"TEST-DEPT-09","items":[{"id":"AD-057","name":"壁挂式公告栏","price":180,"supplier":"广告印刷供应商（待确认）","priceType":"原清单未提供价格；系统仅为流程测试设置的虚构演示价（非合同价）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":true,"qty":3,"accepted":0,"reconciled":0,"deliveredQty":3},{"id":"AD-020","name":"易拉宝","price":90,"supplier":"广告印刷供应商（待确认）","priceType":"原清单未提供价格；系统仅为流程测试设置的虚构演示价（非合同价）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":true,"qty":1,"accepted":0,"reconciled":0,"deliveredQty":1}],"total":630,"tier":"department","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":true,"budgetApproved":true,"status":"delivering","purpose":"部门日常运营物资采购","address":"测试收货地址待完善","receiver":"部门收货人（测试）","due":"待供应商确认","note":"","created":"2026/11/18 11:40:37","supplierRecords":{"广告印刷供应商（待确认）":{"status":"shipping","delivered":false,"confirmedAt":"2026-11-18T03:41:09.437Z","confirmedBy":"TEST-SUPPLIER-AUTO-2","deliveries":[{"batchNo":1,"lines":[{"id":"AD-057","name":"壁挂式公告栏","qty":3},{"id":"AD-020","name":"易拉宝","qty":1}],"note":"1","shipping":{"method":"self","carrier":"","trackingNo":"","contact":"1","vehicleNo":"","estimatedAt":""},"at":"2026-11-18T03:41:25.107Z","by":"TEST-SUPPLIER-AUTO-2"}],"shippedAt":"2026-11-18T03:41:25.107Z"}},"budgetApplied":false,"quoteSource":"department-demo-v1.23","confirmedAt":"2026-11-18T03:40:53.415Z"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0010","items":[{"id":"AD-006","name":"户外写真背胶","price":45,"supplier":"广告印刷供应商（待确认）","priceType":"原清单未提供价格；系统仅为流程测试设置的虚构演示价（非合同价）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":true,"qty":1,"accepted":0,"reconciled":0}],"total":45,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"preparing","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:27:27","supplierRecords":{"广告印刷供应商（待确认）":{"status":"confirmed","delivered":false,"confirmedAt":"2026-11-18T02:41:17.037Z","confirmedBy":"TEST-SUPPLIER-AUTO-2"}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"福海和平店","zone":"第二战区","manager":"测试店长 B（管理2店）","id":"SQ-0009","items":[{"id":"OP-011","name":"蓝牙音箱","price":223,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":false,"qty":2,"accepted":0,"reconciled":0,"deliveredQty":1}],"total":446,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"delivering","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:26:09","supplierRecords":{"运营物资供应商（演示）":{"status":"confirmed","delivered":false,"confirmedAt":"2026-11-17T17:51:07.795Z","confirmedBy":"TEST-SUPPLIER","deliveries":[{"batchNo":1,"lines":[{"id":"OP-011","name":"蓝牙音箱","qty":1}],"note":"模拟分批送达","at":"2026-11-17T17:51:45.129Z","by":"TEST-SUPPLIER"}]}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-B"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0008","items":[{"id":"OP-014","name":"吹风机","price":112,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":false,"qty":2,"accepted":0,"reconciled":0,"deliveredQty":2}],"total":224,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"delivering","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:25:53","supplierRecords":{"运营物资供应商（演示）":{"status":"shipping","delivered":false,"confirmedAt":"2026-11-18T02:50:17.040Z","confirmedBy":"TEST-SUPPLIER","deliveries":[{"batchNo":1,"lines":[{"id":"OP-014","name":"吹风机","qty":2}],"note":"","shipping":{"method":"express","carrier":"圆通速递","trackingNo":"sf202020200202","contact":"","vehicleNo":"","estimatedAt":"2026-11-18T10:50"},"at":"2026-11-18T02:50:57.652Z","by":"TEST-SUPPLIER"}],"shippedAt":"2026-11-18T02:50:57.652Z"}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0007","items":[{"id":"OP-003","name":"保温杯","price":62,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","qty":1,"accepted":0,"reconciled":0}],"total":62,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:20:01","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0006","items":[{"id":"OP-003","name":"保温杯","price":62,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","qty":2,"accepted":0,"reconciled":0}],"total":124,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:17:11","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0005","items":[{"id":"OP-001","name":"充电宝","price":125,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","qty":1,"accepted":0,"reconciled":0}],"total":125,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:16:40","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0004","items":[{"id":"OP-205","name":"活性炭包","price":47,"supplier":"运营物资供应商（演示）","qty":3,"accepted":0,"reconciled":0}],"total":141,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"cancelled","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 00:24:20","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A","cancelledBy":"TEST-STORE-A","cancelledAt":"2026-11-17T16:24:28.316Z"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长","id":"SQ-0003","items":[{"id":"OP-002","name":"暖手宝","category":"奖品类","spec":"PVC材质/绒布、可充电款","unit":"个","price":61,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":1,"accepted":0,"reconciled":0},{"id":"OP-004","name":"晴雨伞","category":"奖品类","spec":"十二骨、三折叠 、晴雨两用","unit":"个","price":44,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":1,"accepted":0,"reconciled":0},{"id":"OP-003","name":"保温杯","category":"奖品类","spec":"500ml、316不锈钢、刻字","unit":"个","price":62,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":2,"accepted":0,"reconciled":0},{"id":"OP-007","name":"颈枕","category":"奖品类","spec":"记忆棉、U型护颈、可拆洗外套、含收纳袋","unit":"个","price":35,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":4,"accepted":0,"reconciled":0},{"id":"OP-008","name":"午睡毯","category":"奖品类","spec":"法兰绒、120×150cm、可机洗、防静电","unit":"条","price":55,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":7,"accepted":0,"reconciled":0}],"total":754,"tier":"region","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 00:05:43","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"local-backend-v1.6"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长","id":"SQ-0002","items":[{"id":"OP-001","name":"充电宝","category":"奖品类","spec":"20000毫安、快充、AH双线","unit":"个","price":125,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":6,"accepted":0,"reconciled":0}],"total":750,"tier":"region","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/17 23:54:46","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"local-backend-v1.6"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"杨理韶","id":"SQ-0001","items":[{"id":"OP-001","name":"充电宝","category":"奖品类","spec":"20000毫安、快充、AH双线","unit":"个","price":125,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":2,"accepted":0,"reconciled":0}],"total":250,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/17 23:49:27","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false}],"recons":[],"seq":12,"budgetConfig":{"rooms":{"安居瑞龙苑店":1000,"萃云阁店":1000,"福海和平店":1000,"福海桥头店":1000},"coef":{"community":10,"customer":10,"marketing":10},"storeCoef":{},"override":{},"baseUsed":{"安居瑞龙苑店":{"community":800,"customer":600,"marketing":400},"萃云阁店":{"community":800,"customer":600,"marketing":400},"福海和平店":{"community":800,"customer":600,"marketing":400},"福海桥头店":{"community":800,"customer":600,"marketing":400}},"adjust":{}},"revision":1};
+const SEED_STATE={"budget":5000,"flex":20000,"baseUsed":1800,"orders":[{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0012","items":[{"id":"AD-048","name":"奖杯","price":65,"supplier":"广告印刷供应商（待确认）","priceType":"原清单未提供价格；系统仅为流程测试设置的虚构演示价（非合同价）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":true,"qty":2,"accepted":0,"reconciled":0,"category":"印刷品物料","budgetItem":"marketing"}],"total":130,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 16:16:28","createdAt":"2026-11-18T08:16:28.535Z","supplierSentAt":"2026-11-18T08:16:28.535Z","stageStartedAt":"2026-11-18T08:16:28.535Z","supplierRecords":{"广告印刷供应商（待确认）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"id":"SQ-0011","purchaseType":"department","department":"人力资源部","groupId":"DP-20261118034037-11","receivingType":"office","store":"公司总部","zone":"总部","manager":"部门测试采购员：人力资源部","submittedBy":"TEST-DEPT-09","items":[{"id":"AD-057","name":"壁挂式公告栏","price":180,"supplier":"广告印刷供应商（待确认）","priceType":"原清单未提供价格；系统仅为流程测试设置的虚构演示价（非合同价）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":true,"qty":3,"accepted":0,"reconciled":0,"deliveredQty":3,"category":"印刷品物料","budgetItem":"marketing"},{"id":"AD-020","name":"易拉宝","price":90,"supplier":"广告印刷供应商（待确认）","priceType":"原清单未提供价格；系统仅为流程测试设置的虚构演示价（非合同价）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":true,"qty":1,"accepted":0,"reconciled":0,"deliveredQty":1,"category":"印刷品物料","budgetItem":"marketing"}],"total":630,"tier":"department","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":true,"budgetApproved":true,"status":"delivering","purpose":"部门日常运营物资采购","address":"测试收货地址待完善","receiver":"部门收货人（测试）","due":"待供应商确认","note":"","created":"2026/11/18 11:40:37","supplierRecords":{"广告印刷供应商（待确认）":{"status":"shipping","delivered":false,"confirmedAt":"2026-11-18T03:41:09.437Z","confirmedBy":"TEST-SUPPLIER-AUTO-2","deliveries":[{"batchNo":1,"lines":[{"id":"AD-057","name":"壁挂式公告栏","qty":3},{"id":"AD-020","name":"易拉宝","qty":1}],"note":"1","shipping":{"method":"self","carrier":"","trackingNo":"","contact":"1","vehicleNo":"","estimatedAt":""},"at":"2026-11-18T03:41:25.107Z","by":"TEST-SUPPLIER-AUTO-2"}],"shippedAt":"2026-11-18T03:41:25.107Z"}},"budgetApplied":false,"quoteSource":"department-demo-v1.23","confirmedAt":"2026-11-18T03:40:53.415Z"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0010","items":[{"id":"AD-006","name":"户外写真背胶","price":45,"supplier":"广告印刷供应商（待确认）","priceType":"原清单未提供价格；系统仅为流程测试设置的虚构演示价（非合同价）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":true,"qty":1,"accepted":0,"reconciled":0,"category":"印刷品物料","budgetItem":"marketing"}],"total":45,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"preparing","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:27:27","supplierRecords":{"广告印刷供应商（待确认）":{"status":"confirmed","delivered":false,"confirmedAt":"2026-11-18T02:41:17.037Z","confirmedBy":"TEST-SUPPLIER-AUTO-2"}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"福海和平店","zone":"第二战区","manager":"测试店长 B（管理2店）","id":"SQ-0009","items":[{"id":"OP-011","name":"蓝牙音箱","price":223,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":false,"qty":2,"accepted":0,"reconciled":0,"deliveredQty":1,"category":"客诉维护物资","budgetItem":"customer"}],"total":446,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"delivering","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:26:09","supplierRecords":{"运营物资供应商（演示）":{"status":"confirmed","delivered":false,"confirmedAt":"2026-11-17T17:51:07.795Z","confirmedBy":"TEST-SUPPLIER","deliveries":[{"batchNo":1,"lines":[{"id":"OP-011","name":"蓝牙音箱","qty":1}],"note":"模拟分批送达","at":"2026-11-17T17:51:45.129Z","by":"TEST-SUPPLIER"}]}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-B"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0008","items":[{"id":"OP-014","name":"吹风机","price":112,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","demoOnly":false,"qty":2,"accepted":0,"reconciled":0,"deliveredQty":2,"category":"客诉维护物资","budgetItem":"customer"}],"total":224,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"delivering","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:25:53","supplierRecords":{"运营物资供应商（演示）":{"status":"shipping","delivered":false,"confirmedAt":"2026-11-18T02:50:17.040Z","confirmedBy":"TEST-SUPPLIER","deliveries":[{"batchNo":1,"lines":[{"id":"OP-014","name":"吹风机","qty":2}],"note":"","shipping":{"method":"express","carrier":"圆通速递","trackingNo":"sf202020200202","contact":"","vehicleNo":"","estimatedAt":"2026-11-18T10:50"},"at":"2026-11-18T02:50:57.652Z","by":"TEST-SUPPLIER"}],"shippedAt":"2026-11-18T02:50:57.652Z"}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0007","items":[{"id":"OP-003","name":"保温杯","price":62,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","qty":1,"accepted":0,"reconciled":0,"category":"客诉维护物资","budgetItem":"customer"}],"total":62,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:20:01","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0006","items":[{"id":"OP-003","name":"保温杯","price":62,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","qty":2,"accepted":0,"reconciled":0,"category":"客诉维护物资","budgetItem":"customer"}],"total":124,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:17:11","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0005","items":[{"id":"OP-001","name":"充电宝","price":125,"supplier":"运营物资供应商（演示）","enabled":true,"contractRef":"","expiresOn":"","configNote":"","qty":1,"accepted":0,"reconciled":0,"category":"客诉维护物资","budgetItem":"customer"}],"total":125,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 01:16:40","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长 A（管理2店）","id":"SQ-0004","items":[{"id":"OP-205","name":"活性炭包","price":47,"supplier":"运营物资供应商（演示）","qty":3,"accepted":0,"reconciled":0,"category":"客诉维护物资","budgetItem":"customer"}],"total":141,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":false,"centralApproved":false,"budgetApproved":true,"status":"cancelled","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 00:24:20","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"backend-atomic-demo-v1.10","submittedBy":"TEST-STORE-A","cancelledBy":"TEST-STORE-A","cancelledAt":"2026-11-17T16:24:28.316Z"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长","id":"SQ-0003","items":[{"id":"OP-002","name":"暖手宝","category":"客诉维护物资","spec":"PVC材质/绒布、可充电款","unit":"个","price":61,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":1,"accepted":0,"reconciled":0,"budgetItem":"customer"},{"id":"OP-004","name":"晴雨伞","category":"客诉维护物资","spec":"十二骨、三折叠 、晴雨两用","unit":"个","price":44,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":1,"accepted":0,"reconciled":0,"budgetItem":"customer"},{"id":"OP-003","name":"保温杯","category":"客诉维护物资","spec":"500ml、316不锈钢、刻字","unit":"个","price":62,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":2,"accepted":0,"reconciled":0,"budgetItem":"customer"},{"id":"OP-007","name":"颈枕","category":"客诉维护物资","spec":"记忆棉、U型护颈、可拆洗外套、含收纳袋","unit":"个","price":35,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":4,"accepted":0,"reconciled":0,"budgetItem":"customer"},{"id":"OP-008","name":"午睡毯","category":"客诉维护物资","spec":"法兰绒、120×150cm、可机洗、防静电","unit":"条","price":55,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":7,"accepted":0,"reconciled":0,"budgetItem":"customer"}],"total":754,"tier":"region","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/18 00:05:43","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"local-backend-v1.6"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"测试店长","id":"SQ-0002","items":[{"id":"OP-001","name":"充电宝","category":"客诉维护物资","spec":"20000毫安、快充、AH双线","unit":"个","price":125,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":6,"accepted":0,"reconciled":0,"budgetItem":"customer"}],"total":750,"tier":"region","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/17 23:54:46","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false,"quoteSource":"local-backend-v1.6"},{"store":"安居瑞龙苑店","zone":"第一战区","manager":"杨理韶","id":"SQ-0001","items":[{"id":"OP-001","name":"充电宝","category":"客诉维护物资","spec":"20000毫安、快充、AH双线","unit":"个","price":125,"priceType":"年度估算单价（非合同价）","supplier":"运营物资供应商（演示）","source":"年度运营物资采购估算清单","icon":"▦","note":"活动奖品、培训类奖品","minOrder":500,"qty":2,"accepted":0,"reconciled":0,"budgetItem":"customer"}],"total":250,"tier":"auto","overPending":false,"overAmount":0,"regionApproved":true,"centralApproved":false,"budgetApproved":true,"status":"supplier","purpose":"门店日常运营","address":"门店收货地址待完善（模拟）","receiver":"门店授权收货人","due":"待供应商确认","note":"","created":"2026/11/17 23:49:27","supplierRecords":{"运营物资供应商（演示）":{"status":"pending","delivered":false}},"budgetApplied":false}],"recons":[],"seq":12,"budgetConfig":{"rooms":{"安居瑞龙苑店":1000,"萃云阁店":1000,"福海和平店":1000,"福海桥头店":1000},"coef":{"community":10,"customer":10,"marketing":10},"storeCoef":{},"override":{},"baseUsed":{"安居瑞龙苑店":{"community":800,"customer":600,"marketing":400},"萃云阁店":{"community":800,"customer":600,"marketing":400},"福海和平店":{"community":800,"customer":600,"marketing":400},"福海桥头店":{"community":800,"customer":600,"marketing":400}},"adjust":{}},"revision":1};
 const STAFF=[{"id":"TEST-STORE-A","name":"测试店长 A","role":"store","zone":"第一战区","stores":["安居瑞龙苑店","萃云阁店"],"desc":"管理 2 家门店"},{"id":"TEST-STORE-B","name":"测试店长 B","role":"store","zone":"第二战区","stores":["福海和平店","福海桥头店"],"desc":"管理 2 家门店"},{"id":"TEST-REGION-A","name":"第一战区负责人","role":"region","zone":"第一战区","stores":[],"desc":"审批本战区预算与金额"},{"id":"TEST-REGION-B","name":"第二战区负责人","role":"region","zone":"第二战区","stores":[],"desc":"审批本战区预算与金额"},{"id":"TEST-CENTRAL","name":"运营管理部（中台）","role":"central","zone":null,"stores":[],"desc":"预算核定、部门确认、对账"}];
 const DEPARTMENTS=["运营管理部","市场运营部","产品研发部","成本采购部","经营发展部","财务管理部","质量安全部","信息技术部","人力资源部","党群工作部（综合管理部）","纪检监察部"];
 const SUPPLIERS=["运营物资供应商（演示）","广告印刷供应商（待确认）"];
@@ -204,86 +254,71 @@ module.exports={SEED_STATE,STAFF,DEPARTMENTS,SUPPLIERS,SLA_HOURS};
 
 __def("data/subcats", function (module, exports, require) {
 // 二级分类（细分目录）：给下单页左侧竖排导航用
-// 归类规则：先按 EXPLICIT 精确名称匹配，再按 GROUPS.keywords 顺序命中，最后落到该大类 default 组
-// 说明：商品目录来自 V1.24 演示数据，没有二级分类字段，这里用关键词语义归类，新增商品时补关键词即可
+// 以合同 × 预算项为基础归为 3 大类（社群活动物资 / 客诉维护物资 / 印刷品物料）
 
 const CAT_KEY = {
-  '奖品礼品': 'prize',
-  '活动及社群物资': 'act',
-  '日常运营耗材': 'daily',
-  '宣传印刷物料': 'print',
-  '员工物资': 'staff'
+  '社群活动物资': 'act',
+  '客诉维护物资': 'cust',
+  '印刷品物料': 'print'
 };
 
-// 每个大类的分组定义（顺序即左侧栏展示顺序，最后一组为兜底组）
+// 每个大类的分组定义（顺序即左侧栏展示顺序，最后一组或空关键词组为兜底组）
 const GROUPS = [
-  // 奖品礼品
-  { cat: '奖品礼品', key: 'digital', label: '数码小电', short: '数码小电',
-    keywords: ['充电宝', '数据线', '音箱', '手机支架', '体脂秤', '手表', '手环', '耳机', '电动牙刷', '台灯', '风扇', '电煮锅', '养生壶', '恒温壶'] },
-  { cat: '奖品礼品', key: 'sport', label: '运动户外', short: '运动户外',
-    keywords: ['健身包', '瑜伽垫', '水壶', '腰包', '袖套', '速干毛巾'] },
-  { cat: '奖品礼品', key: 'home', label: '家居日用', short: '家居日用', keywords: [] },
-
-  // 活动及社群物资
-  { cat: '活动及社群物资', key: 'snack', label: '零食茶歇', short: '零食茶歇',
+  // 社群活动物资（运营物资合同 · 社群活动预算）
+  { cat: '社群活动物资', key: 'snack', label: '零食茶歇', short: '零食茶歇',
     keywords: ['糖果', '巧克力', '饼干', '膨化', '坚果', '蜜饯', '海苔', '辣条', '果冻', '零食'] },
-  { cat: '活动及社群物资', key: 'drink', label: '饮料饮用水', short: '饮料饮水',
+  { cat: '社群活动物资', key: 'drink', label: '饮料饮用水', short: '饮料饮水',
     keywords: ['饮料', '气泡水', '凉茶', '椰子', '乳饮料', '饮用水', '可乐'] },
-  { cat: '活动及社群物资', key: 'honor', label: '奖品伴手', short: '奖品伴手',
-    keywords: ['锦旗', '奖牌', '奖杯', '公仔', '帆布袋'] },
-  { cat: '活动及社群物资', key: 'sport', label: '运动竞技', short: '运动竞技',
+  { cat: '社群活动物资', key: 'sport', label: '运动竞技', short: '运动竞技',
     keywords: ['跳绳', '毽子', '羽毛球', '乒乓球', '篮球', '呼啦圈', '拔河', '接力棒', '弹力球', '泡沫棒', '锥桶', '投壶', '飞镖', '冰壶', '保龄球', '橄榄球', '滑板', '瑜伽球', '握力器', '腕力球', '桌面足球', '沙壶球', '平衡板', '拉力器', '弹力圈', '计分牌', '秒表', '口哨', '号码布', '袖标', '眼罩', '绑腿带', '趾压板', '钓鱼玩具', '沙包', '套圈'] },
-  { cat: '活动及社群物资', key: 'board', label: '桌游棋牌', short: '桌游棋牌',
+  { cat: '社群活动物资', key: 'board', label: '桌游棋牌', short: '桌游棋牌',
     keywords: ['桌游', '扑克', '象棋', '围棋', '五子棋', '飞行棋', '跳棋', '阿瓦隆', 'UNO', '狼人杀', '三国杀', '谁是卧底', '大富翁', '德国心脏病', '达芬奇', '行动代号', '矮人矿工', '真心话', '害你在心口难开', '妙语说书人', '卡坦岛', '军棋', '数独', '七巧板', '汉诺塔', '桥牌', '麻将', '叠叠高', '孔明锁', '九连环', '华容道', '骰盅', '你画我猜', '猜歌名', '词语接龙', '多米诺'] },
-  { cat: '活动及社群物资', key: 'diy', label: '益智手工', short: '益智手工',
+  { cat: '社群活动物资', key: 'diy', label: '益智手工', short: '益智手工',
     keywords: ['积木', '拼图', '磁力片', '油画', '沙画', '羊毛毡', '钻石画', '热缩片', '蜡烛', '干花', '剪纸', '衍纸', '不织布', '手账', '木质拼装', '扎染', '马克笔', '水彩', '素描纸', '卡纸', '剪刀', '固体胶', '折纸', '黏土', '绘本', '显微镜', '望远镜', '地球仪', 'STEM', '捏捏乐', '指尖陀螺', '抓娃娃机', '贴鼻子', '书法', '宣纸', '魔方'] },
-  { cat: '活动及社群物资', key: 'decor', label: '氛围布置', short: '氛围布置',
-    keywords: ['气球', '彩旗', '拉花', '拍照道具', '灯串', '泡泡机', '风筝', '陀螺', '荧光棒', '抽奖', '转盘', '折叠椅', '折叠桌', '野餐垫', '天幕', '桌布', '帐篷', '话筒', '音响'] },
-  { cat: '活动及社群物资', key: 'daily', label: '便民物品', short: '便民物品',
-    keywords: ['雨衣', '指甲刀', '衣架', '针线包'] },
+  { cat: '社群活动物资', key: 'decor', label: '氛围布置', short: '氛围布置',
+    keywords: ['气球', '彩旗', '拉花', '拍照道具', '灯串', '泡泡机', '风筝', '陀螺', '荧光棒', '转盘', '折叠椅', '折叠桌', '野餐垫', '天幕', '话筒', '音响', '公仔', '帆布袋'] },
+  { cat: '社群活动物资', key: 'daily', label: '便民物品', short: '便民物品', keywords: [] },
 
-  // 日常运营耗材
-  { cat: '日常运营耗材', key: 'clean', label: '清洁日用', short: '清洁日用',
+  // 客诉维护物资（运营物资合同 · 客诉预算）
+  { cat: '客诉维护物资', key: 'digital', label: '数码小电', short: '数码小电',
+    keywords: ['充电宝', '数据线', '音箱', '手机支架', '体脂秤', '手表', '手环', '耳机', '电动牙刷', '台灯', '风扇', '电煮锅', '养生壶', '恒温壶'] },
+  { cat: '客诉维护物资', key: 'clean', label: '清洁耗材', short: '清洁耗材',
     keywords: ['垃圾袋', '纸杯', '地漏', '沙发布', '地垫', '除胶剂', '蚊帐'] },
-  { cat: '日常运营耗材', key: 'tool', label: '维修工具', short: '维修工具',
-    keywords: ['螺丝刀', '插线板', '脚套', '挡水条', '空调挡板', '手推车'] },
-  { cat: '日常运营耗材', key: 'pest', label: '除虫除味', short: '除虫除味',
+  { cat: '客诉维护物资', key: 'tool', label: '维修与安全', short: '维修安全',
+    keywords: ['螺丝刀', '插线板', '脚套', '挡水条', '空调挡板', '手推车', '安全', '防护', '手套', '口罩'] },
+  { cat: '客诉维护物资', key: 'pest', label: '除虫除味', short: '除虫除味',
     keywords: ['活性炭', '杀虫剂', '杀蟑'] },
-  { cat: '日常运营耗材', key: 'safety', label: '安全防护', short: '安全防护', keywords: [] },
+  { cat: '客诉维护物资', key: 'gift', label: '客诉日用礼', short: '客诉日用', keywords: [] },
 
-  // 宣传印刷物料
-  { cat: '宣传印刷物料', key: 'paper', label: '纸品印刷', short: '纸品印刷',
+  // 印刷品物料（印刷品物料合同 · 营销预算）
+  { cat: '印刷品物料', key: 'paper', label: '纸品印刷', short: '纸品印刷',
     keywords: ['单页', '折页', '不干胶', '吊牌', '海报', 'POP', '展示卡', '联系卡', '指引卡', '邀请函', '贺卡', '证书', '聘书', '宣传袋', '纸巾盒'] },
-  { cat: '宣传印刷物料', key: 'sign', label: '标识标牌', short: '标识标牌',
+  { cat: '印刷品物料', key: 'sign', label: '标识标牌', short: '标识标牌',
     keywords: ['KT板', 'PVC', '亚克力', '指示牌', '展示牌', '台卡', '提示牌', '导视', '发光字', '挂画框', '公告栏', '灯箱', '不锈钢'] },
-  { cat: '宣传印刷物料', key: 'stand', label: '展示器材', short: '展示器材',
-    keywords: ['易拉宝', '展架', '人字板', '条幅', '横幅', '吊旗', '侧旗', '刀旗', '桁架'] },
-  { cat: '宣传印刷物料', key: 'film', label: '喷绘贴膜', short: '喷绘贴膜',
+  { cat: '印刷品物料', key: 'stand', label: '展示与定制', short: '展示定制',
+    keywords: ['易拉宝', '展架', '人字板', '条幅', '横幅', '吊旗', '侧旗', '刀旗', '桁架', '工卡', '挂绳', '锦旗', '抽奖', '奖牌', '奖杯', '帐篷', '桌布'] },
+  { cat: '印刷品物料', key: 'film', label: '喷绘贴膜', short: '喷绘贴膜',
     keywords: ['喷绘', '刀刮布', '网格布', '背胶', '车贴', '单透', '透明贴', '玻璃贴', '地贴', '软膜', '广告贴', '反光贴', '地毯'] },
-  { cat: '宣传印刷物料', key: 'service', label: '安装服务', short: '安装服务',
-    keywords: ['安装', '作业', '拆除', '维护'] },
-
-  // 员工物资
-  { cat: '员工物资', key: 'card', label: '工卡证件', short: '工卡证件', keywords: [] }
+  { cat: '印刷品物料', key: 'service', label: '安装服务', short: '安装服务', keywords: [] }
 ];
 
 // 精确名单优先（关键词容易误判的商品在这里钉死）
 const EXPLICIT = {
-  // 灯箱画面是喷绘输出，不是标牌
   '灯箱画面': 'film',
-  // 展会吊牌是标牌类，纸质的走纸品
   '车库悬挂式导向吊牌': 'sign',
-  // 印刷地垫按喷绘算
   '电梯地毯': 'film',
-  // 带“海报”字样但实际是展示架
   '桌面海报展示架': 'stand',
-  // 立式展示牌是展架类
-  '立式展示牌': 'stand'
+  '立式展示牌': 'stand',
+  '活动抽奖箱': 'stand',
+  '活动抽奖转盘': 'stand',
+  '活动折叠帐篷': 'stand',
+  '活动桌布': 'stand'
 };
 
 function groupOf(cat, product) {
   const name = product.name || '';
   const own = GROUPS.filter(function (g) { return g.cat === cat; });
+  if (!own.length) return null;
   const pin = EXPLICIT[name];
   if (pin) {
     const hit = own.filter(function (g) { return g.key === pin; })[0];
@@ -295,7 +330,6 @@ function groupOf(cat, product) {
       if (name.indexOf(g.keywords[j]) >= 0) return g;
     }
   }
-  // 兜底：没有关键词的最后一组
   return own.filter(function (g) { return !g.keywords.length; })[0] || own[own.length - 1];
 }
 
@@ -340,9 +374,10 @@ module.exports = { build: build, CAT_KEY: CAT_KEY, GROUPS: GROUPS };
 __def("utils/domain", function (module, exports, require) {
 // 业务规则层：由 V1.24 server.js 移植（试算、分级审批、部门采购、接单、配送、验收、对账、SLA）
 // 所有函数在传入的 state 上原地修改，校验失败抛出 Error，文案与网页版保持一致。
-const { CATALOG, STORES, zoneOf } = require('../data/catalog');
-const { SLA_HOURS, STAFF } = require('../data/seed');
+const { CATALOG, STORES, CATEGORY_ORDER, zoneOf } = require('../data/catalog');
+const { SLA_HOURS, STAFF, SUPPLIERS } = require('../data/seed');
 const BUDGET = require('../data/budget');
+const { APPROVAL_DEFAULT, APPROVAL_LIMITS, CONTRACTS_DEFAULT } = require('../data/rules');
 const fmt = require('./format');
 
 const CATALOG_BY_ID = {};
@@ -362,6 +397,535 @@ function uid() {
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 }
 
+/* ------------------- 动态物资目录 / 供应商 / 合同 / 审批规则（中台操作台） -------------------
+ * 基础数据来自 data/catalog.js 与 data/rules.js；运营管理部在中台操作台做的增删改
+ * 存放在 state.catalogCustom / state.contracts / state.approvalConfig，两端实时生效。
+ */
+function syncCatalogCache(list) {
+  Object.keys(CATALOG_BY_ID).forEach(function (k) { delete CATALOG_BY_ID[k]; });
+  list.forEach(function (p) { CATALOG_BY_ID[p.id] = p; });
+}
+
+function catalogStateOf(state) {
+  if (!state) return { added: [], updated: {}, deleted: {} };
+  if (!state.catalogCustom || typeof state.catalogCustom !== 'object') {
+    state.catalogCustom = { added: [], updated: {}, deleted: {} };
+  }
+  const c = state.catalogCustom;
+  if (!Array.isArray(c.added)) c.added = [];
+  if (!c.updated || typeof c.updated !== 'object') c.updated = {};
+  if (!c.deleted || typeof c.deleted !== 'object') c.deleted = {};
+  return c;
+}
+
+function normalizeScope(item) {
+  return item && (item.purchaseScope === 'central' || item.centralOnly === true) ? 'central' : 'all';
+}
+
+function canActorBuyItem(item, session) {
+  if (!item) return false;
+  if (normalizeScope(item) === 'central') {
+    return !!(session && session.role === 'central');
+  }
+  return true;
+}
+
+// 当前生效的完整物资清单（含中台新增/编辑，默认不含已删除；includeDeleted=true 时保留并标 deleted:true；传 buyer 时按采购权限过滤）
+function catalogOf(state, opts) {
+  const c = catalogStateOf(state);
+  const includeDeleted = opts && opts.includeDeleted;
+  const activeOnly = opts && opts.activeOnly;
+  const buyer = opts && opts.buyer;
+  const out = [];
+  const seen = {};
+
+  CATALOG.forEach(function (base) {
+    seen[base.id] = 1;
+    const isDel = !!c.deleted[base.id];
+    if (isDel && !includeDeleted) return;
+    const patch = c.updated[base.id] || {};
+    const merged = Object.assign({}, base, patch, {
+      id: base.id,
+      enabled: patch.enabled === undefined ? (base.enabled !== false) : !!patch.enabled,
+      deleted: isDel,
+      isCustom: false,
+      isModified: Object.keys(patch).length > 0
+    });
+    merged.purchaseScope = normalizeScope(merged);
+    merged.centralOnly = merged.purchaseScope === 'central';
+    if (activeOnly && (!merged.enabled || merged.deleted)) return;
+    if (buyer && !canActorBuyItem(merged, buyer)) return;
+    out.push(merged);
+  });
+
+  (c.added || []).forEach(function (raw) {
+    if (!raw || !raw.id || seen[raw.id]) return;
+    seen[raw.id] = 1;
+    const isDel = !!c.deleted[raw.id];
+    if (isDel && !includeDeleted) return;
+    const patch = c.updated[raw.id] || {};
+    const merged = Object.assign({}, raw, patch, {
+      id: raw.id,
+      enabled: patch.enabled === undefined ? (raw.enabled !== false) : !!patch.enabled,
+      deleted: isDel,
+      isCustom: true,
+      isModified: Object.keys(patch).length > 0
+    });
+    merged.purchaseScope = normalizeScope(merged);
+    merged.centralOnly = merged.purchaseScope === 'central';
+    if (activeOnly && (!merged.enabled || merged.deleted)) return;
+    if (buyer && !canActorBuyItem(merged, buyer)) return;
+    out.push(merged);
+  });
+
+  if (!includeDeleted && !activeOnly && !buyer) syncCatalogCache(out);
+  return out;
+}
+
+function catalogMapOf(state) {
+  const list = catalogOf(state);
+  const map = {};
+  list.forEach(function (p) { map[p.id] = p; });
+  return map;
+}
+
+function suppliersOf(state) {
+  const set = {};
+  (SUPPLIERS || []).forEach(function (s) { if (s) set[s] = 1; });
+  catalogOf(state, { includeDeleted: true }).forEach(function (p) { if (p.supplier) set[p.supplier] = 1; });
+  ((state && state.contracts) || CONTRACTS_DEFAULT).forEach(function (c) { if (c && c.supplier) set[c.supplier] = 1; });
+  return Object.keys(set);
+}
+
+// 新增或编辑物资（中台）
+function saveCatalogItem(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可维护物资目录');
+  const p = payload || {};
+  const c = catalogStateOf(state);
+  const all = catalogOf(state, { includeDeleted: true });
+  const byId = {};
+  all.forEach(function (x) { byId[x.id] = x; });
+
+  const LEGACY_CAT_MAP = {
+    '活动及社群物资': '社群活动物资',
+    '奖品礼品': '客诉维护物资',
+    '日常运营耗材': '客诉维护物资',
+    '员工物资': '客诉维护物资',
+    '宣传印刷物料': '印刷品物料'
+  };
+  const name = String(p.name || '').trim();
+  if (!name || name.length > 60) throw new Error('请填写1至60字的物资名称');
+  const rawCat = String(p.category || '').trim();
+  const category = LEGACY_CAT_MAP[rawCat] || rawCat;
+  if (CATEGORY_ORDER.indexOf(category) < 0) throw new Error('请选择有效的物资大类');
+  const unit = String(p.unit || '').trim() || '个';
+  if (unit.length > 16) throw new Error('计量单位不超过16字');
+  const spec = String(p.spec || '').trim().slice(0, 120);
+  const supplier = String(p.supplier || '').trim();
+  if (!supplier || supplier.length > 60) throw new Error('请填写或选择供应商');
+  const price = round2(Number(p.price));
+  if (!isFinite(price) || price <= 0 || price > 1000000) throw new Error('单价需在 0.01 到 1,000,000 元之间');
+  const note = String(p.note || '').trim().slice(0, 200);
+  const budgetItem = p.budgetItem && BUDGET.NAME[p.budgetItem] ? p.budgetItem : '';
+  const enabled = p.enabled === undefined ? true : !!p.enabled;
+  const purchaseScope = (p.purchaseScope === 'central' || p.centralOnly === true) ? 'central' : 'all';
+  const centralOnly = purchaseScope === 'central';
+
+  let id = String(p.id || '').trim().toUpperCase();
+  const isEdit = !!p.isEdit;
+  const now = new Date().toISOString();
+
+  if (isEdit) {
+    if (!id || !byId[id]) throw new Error('找不到要修改的物资：' + id);
+    delete c.deleted[id];
+    c.updated[id] = {
+      name: name, category: category, spec: spec, unit: unit,
+      price: price, supplier: supplier, note: note,
+      budgetItem: budgetItem || '',
+      purchaseScope: purchaseScope,
+      centralOnly: centralOnly,
+      enabled: enabled,
+      updatedAt: now,
+      updatedBy: session.id
+    };
+    const next = catalogOf(state);
+    const saved = next.filter(function (x) { return x.id === id; })[0];
+    return {
+      item: saved,
+      created: false,
+      audit: {
+        orderId: id, kind: 'catalog', stage: 'catalog-edit', decision: '修改物资',
+        role: '运营管理部（' + session.id + '）', from: '', to: '',
+        note: name + '（' + category + '，¥' + fmt.money(price) + '/' + unit + (centralOnly ? '，仅中台采购' : '') + '）',
+        at: now
+      }
+    };
+  }
+
+  if (!id) {
+    const prefix = category === '印刷品物料' ? 'AD' : 'WZ';
+    let maxNum = 0;
+    all.forEach(function (x) {
+      const m = String(x.id || '').match(new RegExp('^' + prefix + '-(\\d+)$'));
+      if (m && Number(m[1]) > maxNum) maxNum = Number(m[1]);
+    });
+    id = prefix + '-' + String(maxNum + 1).padStart(3, '0');
+  } else if (!/^[A-Z0-9_-]{2,24}$/.test(id)) {
+    throw new Error('物资编号仅支持大写字母、数字、下划线或连字符（2-24位）');
+  }
+  if (byId[id] && !c.deleted[id]) throw new Error('物资编号已存在：' + id);
+
+  delete c.deleted[id];
+  delete c.updated[id];
+  const item = {
+    id: id, name: name, spec: spec, unit: unit, price: price,
+    supplier: supplier, category: category, note: note,
+    budgetItem: budgetItem || '',
+    purchaseScope: purchaseScope,
+    centralOnly: centralOnly,
+    enabled: enabled, demoOnly: false,
+    createdAt: now, createdBy: session.id
+  };
+  c.added = c.added.filter(function (x) { return x.id !== id; });
+  c.added.unshift(item);
+  catalogOf(state);
+  return {
+    item: Object.assign({ isCustom: true, enabled: enabled }, item),
+    created: true,
+    audit: {
+      orderId: id, kind: 'catalog', stage: 'catalog-add', decision: '新增物资',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: name + '（' + category + '，¥' + fmt.money(price) + '/' + unit + (centralOnly ? '，仅中台采购' : '') + '）',
+      at: now
+    }
+  };
+}
+
+// 采购权限范围切换（仅运营管理部可设置：'central' 仅中台采购 / 'all' 门店及各部门均可自行下单）
+function setCatalogItemScope(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可设置物资采购权限');
+  const p = payload || {};
+  const map = catalogMapOf(state);
+  const c = catalogStateOf(state);
+  const ids = Array.isArray(p.ids) && p.ids.length ? p.ids : [String(p.id || '').trim()];
+  if (!ids[0]) throw new Error('请选择要设置的物资');
+  const now = new Date().toISOString();
+  const changed = [];
+  let lastScope = 'all';
+
+  ids.forEach(function (id) {
+    const cur = map[id];
+    if (!cur) throw new Error('找不到物资：' + id);
+    const nextScope = p.purchaseScope === 'central' || p.purchaseScope === 'all'
+      ? p.purchaseScope
+      : (normalizeScope(cur) === 'central' ? 'all' : 'central');
+    lastScope = nextScope;
+    c.updated[id] = Object.assign({}, c.updated[id] || {}, {
+      purchaseScope: nextScope,
+      centralOnly: nextScope === 'central',
+      updatedAt: now,
+      updatedBy: session.id
+    });
+    changed.push(cur.name + '（' + id + '）');
+  });
+
+  catalogOf(state);
+  return {
+    id: ids[0],
+    ids: ids,
+    name: changed.length === 1 ? map[ids[0]].name : (changed.length + ' 项物资'),
+    purchaseScope: lastScope,
+    centralOnly: lastScope === 'central',
+    audit: {
+      orderId: ids.length === 1 ? ids[0] : '',
+      kind: 'catalog',
+      stage: 'catalog-scope',
+      decision: lastScope === 'central' ? '设为仅中台采购' : '开放全员下单',
+      role: '运营管理部（' + session.id + '）',
+      from: '', to: '',
+      note: changed.slice(0, 5).join('、') + (changed.length > 5 ? ' 等' + changed.length + '项' : ''),
+      at: now
+    }
+  };
+}
+
+// 上下架切换
+function toggleCatalogItem(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可上下架物资');
+  const id = String((payload && payload.id) || '').trim();
+  const map = catalogMapOf(state);
+  const cur = map[id];
+  if (!cur) throw new Error('找不到物资：' + id);
+  const c = catalogStateOf(state);
+  const nextEnabled = payload.enabled === undefined ? !cur.enabled : !!payload.enabled;
+  const now = new Date().toISOString();
+  c.updated[id] = Object.assign({}, c.updated[id] || {}, {
+    enabled: nextEnabled,
+    updatedAt: now,
+    updatedBy: session.id
+  });
+  catalogOf(state);
+  return {
+    id: id,
+    name: cur.name,
+    enabled: nextEnabled,
+    audit: {
+      orderId: id, kind: 'catalog', stage: 'catalog-toggle', decision: nextEnabled ? '上架物资' : '下架物资',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: cur.name + '（' + id + '）',
+      at: now
+    }
+  };
+}
+
+// 删除物资：若有未完结订单引用该物资，禁止直接删除（建议先下架）；历史已完成单不受影响
+function deleteCatalogItem(state, session, id) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可删除物资');
+  const targetId = String(id || '').trim();
+  const all = catalogOf(state, { includeDeleted: true });
+  const item = all.filter(function (x) { return x.id === targetId && !x.deleted; })[0];
+  if (!item) throw new Error('物资不存在或已删除');
+
+  const activeOrder = (state.orders || []).filter(function (o) {
+    if (['done', 'cancelled', 'rejected'].indexOf(o.status) >= 0) return false;
+    return (o.items || []).some(function (x) { return x.id === targetId; });
+  })[0];
+  if (activeOrder) {
+    throw new Error('在途订单 ' + activeOrder.id + ' 包含该物资，请先设为「下架」或等订单完结后再删除');
+  }
+
+  const now = new Date().toISOString();
+  const c = catalogStateOf(state);
+  c.deleted[targetId] = { at: now, by: session.id, name: item.name };
+  catalogOf(state);
+  return {
+    id: targetId,
+    name: item.name,
+    audit: {
+      orderId: targetId, kind: 'catalog', stage: 'catalog-delete', decision: '删除物资',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: item.name + '（' + targetId + '）',
+      at: now
+    }
+  };
+}
+
+// 恢复已删除物资
+function restoreCatalogItem(state, session, id) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可恢复物资');
+  const targetId = String(id || '').trim();
+  const c = catalogStateOf(state);
+  if (!c.deleted[targetId]) throw new Error('该物资未被删除');
+  delete c.deleted[targetId];
+  const list = catalogOf(state);
+  const item = list.filter(function (x) { return x.id === targetId; })[0];
+  const now = new Date().toISOString();
+  const itemName = (item && item.name) || targetId;
+  return {
+    id: targetId,
+    name: itemName,
+    audit: {
+      orderId: targetId, kind: 'catalog', stage: 'catalog-restore', decision: '恢复物资',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: itemName + '（' + targetId + '）',
+      at: now
+    }
+  };
+}
+
+/* ------------------- 门店审批规则配置 ------------------- */
+function approvalConfigOf(state) {
+  const raw = (state && state.approvalConfig) || {};
+  const autoMax = isFinite(Number(raw.autoMax)) ? round2(Number(raw.autoMax)) : APPROVAL_DEFAULT.autoMax;
+  const regionMax = isFinite(Number(raw.regionMax)) ? round2(Number(raw.regionMax)) : APPROVAL_DEFAULT.regionMax;
+  const splitDays = isFinite(Number(raw.splitDays)) ? Math.round(Number(raw.splitDays)) : APPROVAL_DEFAULT.splitDays;
+  return {
+    autoMax: autoMax,
+    regionMax: Math.max(autoMax, regionMax),
+    splitGuard: raw.splitGuard === undefined ? APPROVAL_DEFAULT.splitGuard : !!raw.splitGuard,
+    splitDays: Math.max(1, Math.min(31, splitDays)),
+    autoSkipReview: raw.autoSkipReview === undefined ? APPROVAL_DEFAULT.autoSkipReview : !!raw.autoSkipReview
+  };
+}
+
+function saveApprovalConfig(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可调整审批规则');
+  const p = payload || {};
+  const cur = approvalConfigOf(state);
+  const autoMax = p.autoMax === undefined ? cur.autoMax : round2(Number(p.autoMax));
+  const regionMax = p.regionMax === undefined ? cur.regionMax : round2(Number(p.regionMax));
+  const splitDays = p.splitDays === undefined ? cur.splitDays : Math.round(Number(p.splitDays));
+  if (!isFinite(autoMax) || autoMax < APPROVAL_LIMITS.autoMax[0] || autoMax > APPROVAL_LIMITS.autoMax[1]) {
+    throw new Error('小额上限需在 ' + APPROVAL_LIMITS.autoMax[0] + ' 到 ' + APPROVAL_LIMITS.autoMax[1] + ' 元之间');
+  }
+  if (!isFinite(regionMax) || regionMax < autoMax || regionMax > APPROVAL_LIMITS.regionMax[1]) {
+    throw new Error('战区终审上限需不小于小额上限，且不超过 ' + APPROVAL_LIMITS.regionMax[1] + ' 元');
+  }
+  if (!isFinite(splitDays) || splitDays < APPROVAL_LIMITS.splitDays[0] || splitDays > APPROVAL_LIMITS.splitDays[1]) {
+    throw new Error('防拆单统计天数需在 1 到 31 天之间');
+  }
+  state.approvalConfig = {
+    autoMax: autoMax,
+    regionMax: regionMax,
+    splitGuard: p.splitGuard === undefined ? cur.splitGuard : !!p.splitGuard,
+    splitDays: splitDays,
+    autoSkipReview: p.autoSkipReview === undefined ? cur.autoSkipReview : !!p.autoSkipReview
+  };
+  const now = new Date().toISOString();
+  return {
+    config: state.approvalConfig,
+    audit: {
+      orderId: '', kind: 'rules', stage: 'rules-save', decision: '更新审批规则',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: '小额≤¥' + fmt.money(autoMax) + '，战区终审≤¥' + fmt.money(regionMax) +
+        (state.approvalConfig.splitGuard ? '，防拆单' + splitDays + '天' : '，关闭防拆单') +
+        (state.approvalConfig.autoSkipReview ? '，小额免审直发' : ''),
+      at: now
+    }
+  };
+}
+
+// 某门店近 N 天已提交的有效订单累计金额（分）——用于防拆单定档（支持按同费用科目过滤且排除已中台审批大单）
+function recentStoreCents(state, store, days, excludeId, budgetKeys) {
+  const windowMs = (days || APPROVAL_DEFAULT.splitDays) * 86400000;
+  const now = Date.now();
+  const keys = Array.isArray(budgetKeys) && budgetKeys.length ? budgetKeys : null;
+  let sum = 0;
+  (state.orders || []).forEach(function (o) {
+    if (!o || o.id === excludeId) return;
+    if (o.purchaseType === 'department' || o.store !== store) return;
+    if (['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
+    if (o.tier === 'central') return;
+    const ts = parseTime(o.createdAt || o.created);
+    if (!isNaN(ts) && now - ts > windowMs) return;
+    if (keys) {
+      const sp = splitOrder(o);
+      keys.forEach(function (k) {
+        if (sp[k]) sum += cents(sp[k].total);
+      });
+    } else {
+      sum += cents(o.total || 0);
+    }
+  });
+  return sum;
+}
+
+/* ------------------- 供应商合同总额上限（职能部门采购） -------------------
+ * 规则：职能部门不设部门预算，但每个供应商签有年度/框架合同总额上限；
+ *       所有有效采购单（已结算按结算金额、未结算按下单金额）累计不得超过该供应商合同总额。
+ */
+function contractsOf(state) {
+  if (!state) return CONTRACTS_DEFAULT.slice();
+  if (!Array.isArray(state.contracts) || !state.contracts.length) {
+    state.contracts = JSON.parse(JSON.stringify(CONTRACTS_DEFAULT));
+  }
+  return state.contracts;
+}
+
+// 订单在各供应商上的有效金额（分）：若已双方确认结算，按确认值或分供应商明细计算；否则按订单明细金额
+function supplierOrderCents(order, supplier) {
+  if (!order || ['rejected', 'cancelled'].indexOf(order.status) >= 0) return 0;
+  const items = (order.items || []).filter(function (x) { return x.supplier === supplier; });
+  if (!items.length) return 0;
+  const rawCents = items.reduce(function (s, x) {
+    return s + cents(Number(x.price || 0) * Number(x.qty || 0));
+  }, 0);
+  const settle = order.settlement;
+  if (settle && settle.status === 'confirmed' && isFinite(Number(settle.amount))) {
+    if (settle.bySupplier && isFinite(Number(settle.bySupplier[supplier]))) {
+      return cents(settle.bySupplier[supplier]);
+    }
+    const orderRaw = (order.items || []).reduce(function (s, x) {
+      return s + cents(Number(x.price || 0) * Number(x.qty || 0));
+    }, 0);
+    if (orderRaw > 0) return Math.round(cents(settle.amount) * (rawCents / orderRaw));
+  }
+  return rawCents;
+}
+
+function contractSummary(state, excludeOrderId) {
+  const list = contractsOf(state);
+  return list.map(function (c) {
+    const capCents = cents(c.total || 0);
+    let deptUsed = 0;
+    let storeUsed = 0;
+    (state.orders || []).forEach(function (o) {
+      if (!o || o.id === excludeOrderId || ['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
+      const amt = supplierOrderCents(o, c.supplier);
+      if (!amt) return;
+      if (o.purchaseType === 'department') deptUsed += amt;
+      else storeUsed += amt;
+    });
+    const usedCents = deptUsed + storeUsed;
+    const remainCents = Math.max(0, capCents - usedCents);
+    return {
+      id: c.id,
+      supplier: c.supplier,
+      name: c.name || (c.supplier + '框架合同'),
+      total: round2(capCents / 100),
+      deptUsed: round2(deptUsed / 100),
+      storeUsed: round2(storeUsed / 100),
+      used: round2(usedCents / 100),
+      remaining: round2(remainCents / 100),
+      usedPct: capCents > 0 ? Math.min(100, Math.round(usedCents / capCents * 100)) : 0,
+      start: c.start || '',
+      end: c.end || '',
+      note: c.note || ''
+    };
+  });
+}
+
+function saveContract(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可维护合同上限');
+  const p = payload || {};
+  const list = contractsOf(state);
+  const supplier = String(p.supplier || '').trim();
+  if (!supplier) throw new Error('请选择或填写供应商名称');
+  const name = String(p.name || '').trim() || (supplier + '采购合同');
+  const total = round2(Number(p.total));
+  if (!isFinite(total) || total <= 0 || total > 100000000) throw new Error('合同总额需在 0.01 到 1 亿元之间');
+  let id = String(p.id || '').trim();
+  const now = new Date().toISOString();
+  const existing = list.filter(function (c) { return (id && c.id === id) || c.supplier === supplier; })[0];
+  if (existing) {
+    existing.supplier = supplier;
+    existing.name = name;
+    existing.total = total;
+    existing.start = String(p.start || existing.start || '').slice(0, 20);
+    existing.end = String(p.end || existing.end || '').slice(0, 20);
+    existing.note = String(p.note !== undefined ? p.note : (existing.note || '')).slice(0, 120);
+    return {
+      contract: existing,
+      created: false,
+      audit: {
+        orderId: existing.id, kind: 'contract', stage: 'contract-edit', decision: '调整合同上限',
+        role: '运营管理部（' + session.id + '）', from: '', to: '',
+        note: supplier + '（总额 ¥' + fmt.money(total) + '）',
+        at: now
+      }
+    };
+  }
+  if (!id) id = 'HT-' + new Date().getFullYear() + '-' + String(list.length + 1).padStart(3, '0');
+  const row = {
+    id: id, supplier: supplier, name: name, total: total,
+    start: String(p.start || '').slice(0, 20),
+    end: String(p.end || '').slice(0, 20),
+    note: String(p.note || '').slice(0, 120)
+  };
+  list.push(row);
+  return {
+    contract: row,
+    created: true,
+    audit: {
+      orderId: row.id, kind: 'contract', stage: 'contract-add', decision: '新增供应商合同',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: supplier + '（总额 ¥' + fmt.money(total) + '）',
+      at: now
+    }
+  };
+}
+
+
 /* ------------------- 费用预算（门店 × 科目） -------------------
  * 额度 = 房间数 × 科目系数（中台可按门店改系数或直接定额），再叠加手工增减：
  *   adjust>0  机动预算池追加 / 其他门店调剂进来
@@ -378,13 +942,14 @@ function flexCentsOf(state) {
 }
 
 // 订单在各科目上的金额：{ key: { total, accepted } }（元）
+// 若订单已双方确认结算（settlement.status === 'confirmed'），按最终结算金额同比例分摊到各科目，释放折让部分的预算占用
 function splitOrder(order) {
   const out = {};
   BUDGET.KEYS.forEach(function (k) { out[k] = { total: 0, accepted: 0 }; });
   if (!order) return out;
   (order.items || []).forEach(function (x) {
     const p = CATALOG_BY_ID[x.id];
-    const k = BUDGET.itemOf(p || x);
+    const k = BUDGET.itemOf(x.budgetItem ? x : (p || x));
     // 订单行通常带 price；历史数据缺失时回退到目录价，避免金额算成 0
     const price = Number(x.price !== undefined ? x.price : (p && p.price) || 0);
     const total = price * Number(x.qty || 0);
@@ -393,6 +958,43 @@ function splitOrder(order) {
     out[k].total = round2(out[k].total + total);
     out[k].accepted = round2(out[k].accepted + accepted);
   });
+  const settle = order.settlement;
+  if (settle && settle.status === 'confirmed' && isFinite(Number(settle.amount))) {
+    if (settle.bySupplier && typeof settle.bySupplier === 'object') {
+      const supRaw = {};
+      const nextOut = {};
+      BUDGET.KEYS.forEach(function (k) { nextOut[k] = { total: 0, accepted: 0 }; });
+      (order.items || []).forEach(function (x) {
+        const p = CATALOG_BY_ID[x.id];
+        const price = Number(x.price !== undefined ? x.price : (p && p.price) || 0);
+        const raw = price * Number(x.qty || 0);
+        const sup = x.supplier || '_';
+        supRaw[sup] = (supRaw[sup] || 0) + raw;
+      });
+      (order.items || []).forEach(function (x) {
+        const p = CATALOG_BY_ID[x.id];
+        const k = BUDGET.itemOf(x.budgetItem ? x : (p || x));
+        const price = Number(x.price !== undefined ? x.price : (p && p.price) || 0);
+        const raw = price * Number(x.qty || 0);
+        const sup = x.supplier || '_';
+        const supSettled = isFinite(Number(settle.bySupplier[sup])) ? Number(settle.bySupplier[sup]) : supRaw[sup];
+        const scaled = supRaw[sup] > 0 ? round2(raw * (supSettled / supRaw[sup])) : 0;
+        if (!nextOut[k]) nextOut[k] = { total: 0, accepted: 0 };
+        nextOut[k].total = round2(nextOut[k].total + scaled);
+        nextOut[k].accepted = round2(nextOut[k].accepted + scaled);
+      });
+      return nextOut;
+    }
+    const rawSum = BUDGET.KEYS.reduce(function (s, k) { return s + out[k].total; }, 0);
+    if (rawSum > 0) {
+      const ratio = Number(settle.amount) / rawSum;
+      BUDGET.KEYS.forEach(function (k) {
+        const scaled = round2(out[k].total * ratio);
+        out[k].total = scaled;
+        out[k].accepted = scaled;
+      });
+    }
+  }
   return out;
 }
 
@@ -657,6 +1259,7 @@ function computeQuote(state, input) {
   if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 80) {
     throw new Error('请选择1至80项物料');
   }
+  const catMap = catalogMapOf(state);
   let totalCents = 0;
   const confirmed = [];
   const seen = {};
@@ -666,9 +1269,13 @@ function computeQuote(state, input) {
     }
     if (seen[line.id]) throw new Error('商品重复，请在一行填写数量');
     seen[line.id] = 1;
-    const item = CATALOG_BY_ID[line.id];
-    if (!item) throw new Error('商品未找到：' + line.id);
-    if (typeof item.price !== 'number' || !isFinite(item.price) || item.price < 0) {
+    const item = catMap[line.id] || CATALOG_BY_ID[line.id];
+    if (!item || item.deleted) throw new Error('商品未找到：' + line.id);
+    if (item.enabled === false) throw new Error('商品已下架，暂不能下单：' + item.name);
+    if (normalizeScope(item) === 'central') {
+      throw new Error('「' + item.name + '」已设为仅运营管理部（中台）集中采购，门店不可自行下单');
+    }
+    if (typeof item.price !== 'number' || !isFinite(item.price) || item.price <= 0) {
       throw new Error('商品尚无合同价，暂不能下单：' + item.name);
     }
     const unitCents = cents(item.price);
@@ -677,18 +1284,18 @@ function computeQuote(state, input) {
   });
   if (totalCents <= 0 || totalCents > 1000000000) throw new Error('试算金额超出演示范围');
 
-  // 按费用科目拆分这笔单：每个科目各自比对可用额度
+  // 按费用科目拆分这笔单：每个科目各自比对可用额度（额度 = 房间数 × 系数）
   const cfg = budgetCfg(state);
   const split = {};
   BUDGET.KEYS.forEach(function (k) { split[k] = { total: 0, usable: 0, over: 0 }; });
   confirmed.forEach(function (line) {
-    const k = BUDGET.itemOf(CATALOG_BY_ID[line.id]);
+    const k = BUDGET.itemOf(catMap[line.id] || CATALOG_BY_ID[line.id]);
     split[k].total = round2(split[k].total + line.amount);
   });
   const budgetRows = BUDGET.KEYS.filter(function (k) {
     return split[k].total > 0;
   }).map(function (k) {
-    const usable = round2(storeUsableCents(state, input.store, null, k) / 100);
+    const usable = round2(storeUsableCents(state, input.store, input.excludeId || null, k) / 100);
     const total = split[k].total;
     return {
       key: k,
@@ -703,16 +1310,46 @@ function computeQuote(state, input) {
   });
   const availableCents = cents(budgetRows.reduce(function (s, r) { return s + r.usable; }, 0));
   const overAmountCents = cents(budgetRows.reduce(function (s, r) { return s + r.over; }, 0));
-  // 机动（预留）池能补的上限：超预算是从这里划额度，超出即核不出来，下单端就该提醒拆单
+  // 机动（预留）池能补的上限：超预算是从这里划额度，超出即核不出来，下单端直接拦截
   const flexCents = flexCentsOf(state);
   const maxSupportCents = availableCents + flexCents;
-  const hardOver = totalCents > maxSupportCents;
-  const tier = totalCents <= 50000 ? 'auto' : totalCents <= 200000 ? 'region' : 'central';
+  const hardOver = overAmountCents > flexCents;
+
+  // 审批定档：支持中台自定义阈值 + 近 N 天同店同科目累计防拆单
+  const ac = approvalConfigOf(state);
+  const autoMaxCents = cents(ac.autoMax);
+  const regionMaxCents = cents(ac.regionMax);
+  const activeKeys = budgetRows.map(function (r) { return r.key; });
+  const recentCents = ac.splitGuard ? recentStoreCents(state, input.store, ac.splitDays, input.excludeId, activeKeys) : 0;
+  const basisCents = ac.splitGuard ? (totalCents + recentCents) : totalCents;
+  const rawTier = totalCents <= autoMaxCents ? 'auto' : totalCents <= regionMaxCents ? 'region' : 'central';
+  const tier = basisCents <= autoMaxCents ? 'auto' : basisCents <= regionMaxCents ? 'region' : 'central';
+  const splitUpgraded = ac.splitGuard && tier !== rawTier;
+  const autoSkip = overAmountCents <= 0 && tier === 'auto' && ac.autoSkipReview;
+  const nextStep = autoSkip ? 'supplier' : 'order-review';
+
+  let pathText = '';
+  if (hardOver) {
+    pathText = '超出科目可用额度 ¥' + fmt.money(overAmountCents / 100) + '，且超过机动池上限（¥' + fmt.money(flexCents / 100) + '），无法提交，请拆分下单或联系运营管理部';
+  } else if (overAmountCents > 0) {
+    pathText = '提交后先由战区审核（需填写超预算理由），通过后由运营管理部一步完成预算核定与金额审批';
+  } else if (autoSkip) {
+    pathText = '预算内且 ≤¥' + fmt.money(ac.autoMax) + '（含近' + ac.splitDays + '天累计），免战区审核直接发送供应商';
+  } else if (tier === 'auto') {
+    pathText = '提交后由战区审核，通过即发送供应商（≤¥' + fmt.money(ac.autoMax) + ' 免金额审批）';
+  } else if (tier === 'region') {
+    pathText = '提交后由战区一步终审（合规 + ¥' + fmt.money(ac.autoMax) + '–' + fmt.money(ac.regionMax) + ' 金额合并审核），通过即发送供应商' +
+      (splitUpgraded ? '（近' + ac.splitDays + '天累计 ¥' + fmt.money(basisCents / 100) + ' 触发防拆单升级）' : '');
+  } else {
+    pathText = '提交后先由战区审核，再报运营管理部金额审批（>¥' + fmt.money(ac.regionMax) + '）' +
+      (splitUpgraded ? '（近' + ac.splitDays + '天累计 ¥' + fmt.money(basisCents / 100) + ' 触发防拆单升级）' : '');
+  }
+
   return {
     total: totalCents / 100,
     available: availableCents / 100,
     availableAll: round2(BUDGET.KEYS.reduce(function (s, k) {
-      return s + storeUsableCents(state, input.store, null, k) / 100;
+      return s + storeUsableCents(state, input.store, input.excludeId || null, k) / 100;
     }, 0)),
     budgetItems: budgetRows,
     overAmount: overAmountCents / 100,
@@ -721,34 +1358,37 @@ function computeQuote(state, input) {
     maxSupport: maxSupportCents / 100,
     hardOver: hardOver,
     tier: tier,
+    rawTier: rawTier,
+    splitUpgraded: splitUpgraded,
+    recentTotal: recentCents / 100,
+    cumulativeTotal: basisCents / 100,
+    splitDays: ac.splitDays,
     tierLabel: fmt.TIER_LABEL[tier],
-    nextStep: 'order-review',
+    nextStep: nextStep,
     items: confirmed,
-    pathText: hardOver
-      ? '超出可用预算，且超过「科目额度 + 机动池」可核定上限，需拆分下单或转专项采购'
-      : overAmountCents > 0
-        ? '提交后先由战区审核；超出科目额度，审核通过后转运营管理部核定预算'
-        : tier === 'auto'
-          ? '提交后先由战区审核，通过即发送供应商（500元以内免金额审批）'
-          : tier === 'region'
-            ? '提交后先由战区审核，再走战区金额审批（500-2000元）'
-            : '提交后先由战区审核，再报运营管理部金额审批（2000元以上）'
+    pathText: pathText
   };
 }
 
 /* ------------------------- 门店下单 ------------------------- */
-function createStoreOrder(state, session, input) {
-  if (!session || session.role !== 'store') throw new Error('请先切换为门店店长身份');
-  if (!session.stores || session.stores.indexOf(input.store) < 0) throw new Error('该测试店长无此门店权限');
+function createSingleStoreOrder(state, session, input, groupId) {
   const details = input.details || {};
   const address = String(details.address || '').trim();
   const receiver = String(details.receiver || '').trim();
-  if (!address || !receiver || address.length > 180 || receiver.length > 80) throw new Error('请检查收货地址和联系人');
   const purpose = String(details.purpose || '门店日常运营').slice(0, 80);
   const note = String(details.note || '').slice(0, 500);
+  const overReason = String(details.overReason || input.overReason || '').trim().slice(0, 200);
   const due = String(details.due || '').slice(0, 80) || '待供应商确认';
 
   const quote = computeQuote(state, input);
+  if (quote.hardOver) {
+    throw new Error('超出门店科目可用额度与机动池可核定上限（最多可核定 ¥' + fmt.money(quote.maxSupport) + '），请缩减数量、拆分下单或联系运营管理部');
+  }
+  if (quote.overBudget && overReason && overReason.length < 4) {
+    throw new Error('超预算原因至少填写 4 个字');
+  }
+
+  const catMap = catalogMapOf(state);
   const number = Math.max.apply(null, [Number(state.seq) || 0].concat(state.orders.map(function (o) {
     const m = String(o.id || '').match(/^SQ-(\d+)$/);
     return m ? Number(m[1]) : 0;
@@ -756,22 +1396,28 @@ function createStoreOrder(state, session, input) {
   const id = 'SQ-' + String(number).padStart(4, '0');
 
   const items = quote.items.map(function (line) {
-    const p = CATALOG_BY_ID[line.id];
+    const p = catMap[line.id] || CATALOG_BY_ID[line.id];
     return {
       id: p.id, name: p.name, spec: p.spec, unit: p.unit, price: line.unitPrice,
-      supplier: p.supplier, category: p.category, demoOnly: p.demoOnly,
+      supplier: p.supplier, category: p.category, budgetItem: p.budgetItem, demoOnly: p.demoOnly,
       qty: line.qty, accepted: 0, reconciled: 0
     };
   });
+  const now = new Date().toISOString();
+  const initStatus = quote.nextStep || 'order-review';
   const supplierRecords = {};
   items.forEach(function (p) {
-    supplierRecords[p.supplier] = { status: 'pending', delivered: false };
+    supplierRecords[p.supplier] = {
+      status: 'pending',
+      delivered: false,
+      pendingSince: initStatus === 'supplier' ? now : null
+    };
   });
 
-  const now = new Date().toISOString();
   const order = {
     id: id,
     purchaseType: 'store',
+    groupId: groupId || null,
     store: input.store,
     zone: zoneOf(input.store) || session.zone || '',
     manager: session.name,
@@ -779,13 +1425,14 @@ function createStoreOrder(state, session, input) {
     items: items,
     total: quote.total,
     tier: quote.tier,
+    splitUpgraded: quote.splitUpgraded,
     overPending: quote.overBudget,
     overAmount: quote.overAmount,
-    regionApproved: false,
+    overReason: overReason,
+    regionApproved: initStatus === 'supplier',
     centralApproved: false,
     budgetApproved: !quote.overBudget,
-    // 门店单统一先经战区审核：额度/合规由战区把关，通过后再按金额分级
-    status: 'order-review',
+    status: initStatus,
     purpose: purpose,
     address: address,
     receiver: receiver,
@@ -793,18 +1440,113 @@ function createStoreOrder(state, session, input) {
     note: note,
     created: fmt.nowText(),
     createdAt: now,
-    supplierSentAt: null,
+    supplierSentAt: initStatus === 'supplier' ? now : null,
     stageStartedAt: now,
     supplierRecords: supplierRecords,
     budgetApplied: false,
-    quoteSource: 'miniprogram-v1.24'
+    quoteSource: 'miniprogram-v1.26'
   };
   state.orders.unshift(order);
   state.seq = number;
   return { order: order, quote: quote };
 }
 
-/* ------------------------- 职能部门采购 ------------------------- */
+function createStoreOrder(state, session, input) {
+  if (!session || session.role !== 'store') throw new Error('请先切换为门店店长身份');
+  if (!session.stores || session.stores.indexOf(input.store) < 0) throw new Error('该测试店长无此门店权限');
+  const details = input.details || {};
+  const address = String(details.address || '').trim();
+  const receiver = String(details.receiver || '').trim();
+  if (!address || !receiver || address.length > 180 || receiver.length > 80) throw new Error('请检查收货地址和联系人');
+
+  const wholeQuote = computeQuote(state, input);
+  if (wholeQuote.hardOver) {
+    throw new Error('超出门店科目可用额度与机动池可核定上限（最多可核定 ¥' + fmt.money(wholeQuote.maxSupport) + '），请缩减数量、拆分下单或联系运营管理部');
+  }
+  const overReason = String(details.overReason || input.overReason || '').trim();
+  if (wholeQuote.overBudget && overReason && overReason.length < 4) {
+    throw new Error('超预算原因至少填写 4 个字');
+  }
+
+  if (input.splitByContract) {
+    const catMap = catalogMapOf(state);
+    const bySupplier = {};
+    const supOrder = [];
+    (input.items || []).forEach(function (line) {
+      const p = catMap[line.id] || CATALOG_BY_ID[line.id];
+      const sup = (p && p.supplier) || '其他供应商';
+      if (!bySupplier[sup]) { bySupplier[sup] = []; supOrder.push(sup); }
+      bySupplier[sup].push(line);
+    });
+    if (supOrder.length > 1) {
+      const groupId = 'SG-' + new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14) + '-' + ((Number(state.seq) || 0) + 1);
+      const created = supOrder.map(function (sup) {
+        return createSingleStoreOrder(state, session, Object.assign({}, input, { items: bySupplier[sup] }), groupId).order;
+      });
+      return { order: created[0], orders: created, quote: wholeQuote, splitByContract: true, groupId: groupId };
+    }
+  }
+
+  const single = createSingleStoreOrder(state, session, input, null);
+  return { order: single.order, orders: [single.order], quote: single.quote, splitByContract: false };
+}
+
+/* ------------------------- 职能部门采购（不设预算，受供应商合同总额上限约束） ------------------------- */
+function checkContractCap(state, bySupplierCents) {
+  const summaries = contractSummary(state);
+  const bySup = {};
+  summaries.forEach(function (c) { bySup[c.supplier] = c; });
+  Object.keys(bySupplierCents).forEach(function (sup) {
+    const needCents = bySupplierCents[sup];
+    if (needCents <= 0) return;
+    const contract = bySup[sup];
+    if (!contract) return;
+    const remainCents = cents(contract.remaining);
+    if (needCents > remainCents) {
+      throw new Error(
+        '超出「' + sup + '」合同总额上限（合同总额 ¥' + fmt.money(contract.total) +
+        '，剩余可用 ¥' + fmt.money(contract.remaining) +
+        '，本次申请 ¥' + fmt.money(needCents / 100) + '）'
+      );
+    }
+  });
+}
+
+function computeDepartmentQuote(state, items) {
+  const catMap = catalogMapOf(state);
+  const bySupplier = {};
+  let totalCents = 0;
+  (items || []).forEach(function (raw) {
+    const p = catMap[raw.id] || CATALOG_BY_ID[raw.id];
+    if (!p || p.deleted || p.enabled === false) return;
+    const amt = cents(p.price) * Number(raw.qty || 0);
+    totalCents += amt;
+    bySupplier[p.supplier] = (bySupplier[p.supplier] || 0) + amt;
+  });
+  const summaries = contractSummary(state);
+  const contractRows = summaries.filter(function (c) { return bySupplier[c.supplier] > 0; }).map(function (c) {
+    const apply = round2((bySupplier[c.supplier] || 0) / 100);
+    const over = round2(Math.max(0, apply - c.remaining));
+    return {
+      id: c.id,
+      supplier: c.supplier,
+      name: c.name,
+      total: c.total,
+      used: c.used,
+      remaining: c.remaining,
+      apply: apply,
+      over: over,
+      overCap: over > 0
+    };
+  });
+  const overCap = contractRows.some(function (r) { return r.overCap; });
+  return {
+    total: round2(totalCents / 100),
+    contractRows: contractRows,
+    overCap: overCap
+  };
+}
+
 function createDepartmentOrders(state, session, input) {
   if (!session || ['department', 'central'].indexOf(session.role) < 0 || !session.department) {
     throw new Error('请切换为职能部门或运营管理部身份');
@@ -812,10 +1554,12 @@ function createDepartmentOrders(state, session, input) {
   if (!input || !Array.isArray(input.destinations) || input.destinations.length < 1 || input.destinations.length > 20) {
     throw new Error('请选择1至20个配送地点');
   }
+  const catMap = catalogMapOf(state);
   const note = String(input.note || '').trim().slice(0, 300);
   const purpose = String(input.purpose || '部门日常采购').slice(0, 80);
   const seenDest = {};
   const validated = [];
+  const bySupplierCents = {};
   let grandCents = 0;
 
   input.destinations.forEach(function (dest) {
@@ -837,13 +1581,20 @@ function createDepartmentOrders(state, session, input) {
       if (!raw || !raw.id || !Number.isSafeInteger(raw.qty) || raw.qty < 1 || raw.qty > 9999) throw new Error('数量须为1至9999的整数');
       if (seenItems[raw.id]) throw new Error('同一地点商品重复');
       seenItems[raw.id] = 1;
-      const p = CATALOG_BY_ID[raw.id];
-      if (!p || typeof p.price !== 'number' || p.price <= 0) throw new Error('所选商品暂不可采购');
+      const p = catMap[raw.id] || CATALOG_BY_ID[raw.id];
+      if (!p || p.deleted || p.enabled === false || typeof p.price !== 'number' || p.price <= 0) {
+        throw new Error('所选商品已下架或暂不可采购');
+      }
+      if (session.role !== 'central' && normalizeScope(p) === 'central') {
+        throw new Error('「' + p.name + '」已设为仅运营管理部（中台）集中采购，请由运营管理部统一下单');
+      }
       const unit = cents(p.price);
-      sum += unit * raw.qty;
+      const lineCents = unit * raw.qty;
+      sum += lineCents;
+      bySupplierCents[p.supplier] = (bySupplierCents[p.supplier] || 0) + lineCents;
       lines.push({
         id: p.id, name: p.name, spec: p.spec, unit: p.unit, price: unit / 100,
-        supplier: p.supplier, category: p.category, demoOnly: p.demoOnly,
+        supplier: p.supplier, category: p.category, budgetItem: p.budgetItem, demoOnly: p.demoOnly,
         qty: raw.qty, accepted: 0, reconciled: 0
       });
     });
@@ -851,6 +1602,9 @@ function createDepartmentOrders(state, session, input) {
     validated.push({ type: dest.type, name: name, address: address, receiver: receiver, items: lines, total: sum / 100 });
   });
   if (grandCents <= 0 || grandCents > 1000000000) throw new Error('金额超出演示范围');
+
+  // 职能部门不设预算，但总费用不得超过所涉供应商合同总额
+  checkContractCap(state, bySupplierCents);
 
   let seq = Math.max.apply(null, [Number(state.seq) || 0].concat(state.orders.map(function (o) {
     const m = String(o.id || '').match(/^SQ-(\d+)$/);
@@ -898,7 +1652,7 @@ function createDepartmentOrders(state, session, input) {
       supplierSentAt: selfPurchase ? now : null,
       supplierRecords: supplierRecords,
       budgetApplied: false,
-      quoteSource: 'department-miniprogram-v1.24'
+      quoteSource: 'department-miniprogram-v1.25'
     });
   });
 
@@ -907,7 +1661,7 @@ function createDepartmentOrders(state, session, input) {
   return { groupId: groupId, orders: generated, total: grandCents / 100 };
 }
 
-function approveDepartmentGroup(state, session, groupId, pass) {
+function approveDepartmentGroup(state, session, groupId, pass, noteText) {
   if (!session || session.role !== 'central') throw new Error('仅运营管理部可确认部门采购');
   if (!/^DP-[0-9]{14}-[0-9]{1,10}$/.test(String(groupId || ''))) throw new Error('采购批次编号无效');
   const orders = (state.orders || []).filter(function (o) {
@@ -915,6 +1669,8 @@ function approveDepartmentGroup(state, session, groupId, pass) {
   });
   if (!orders.length) throw new Error('找不到部门采购批次');
   if (orders.some(function (o) { return o.status !== 'dept-approval'; })) throw new Error('批次已处理，请刷新');
+  const remark = String(noteText || '').trim().slice(0, 200);
+  if (!pass && remark && remark.length < 2) throw new Error('请填写驳回原因');
   const now = new Date().toISOString();
   const audits = [];
   orders.forEach(function (o) {
@@ -922,6 +1678,7 @@ function approveDepartmentGroup(state, session, groupId, pass) {
     o.centralApproved = !!pass;
     o.confirmedAt = now;
     o.stageStartedAt = now;
+    if (!pass && remark) o.rejectReason = remark;
     if (pass) {
       o.supplierSentAt = now;
       Object.keys(o.supplierRecords || {}).forEach(function (k) { o.supplierRecords[k].pendingSince = now; });
@@ -929,17 +1686,60 @@ function approveDepartmentGroup(state, session, groupId, pass) {
     audits.push({
       orderId: o.id, kind: 'approval', stage: 'dept-approval', decision: pass ? '确认采购' : '驳回',
       role: '运营管理部（' + session.id + '，模拟）', from: 'dept-approval', to: o.status,
-      note: '部门采购批次 ' + groupId, at: now
+      note: '部门采购批次 ' + groupId + (remark ? '；说明：' + remark : ''), at: now
     });
   });
   return { count: orders.length, status: pass ? 'supplier' : 'rejected', audits: audits };
 }
 
-/* ------------------------- 审批 ------------------------- */
+/* ------------------------- 审批（优化后：去重合并 + 驳回原因 + 数量微调 + 批量通过） -------------------------
+ * 关键优化：
+ * 1. 预算内 500–2000 元门店单：战区在 order-review 一步终审（合规 + 金额合并），不再二次进入 amount-approval 让同一人点两遍；
+ * 2. 超预算门店单：战区审核通过 → 运营管理部在 budget-central 一步完成「预算核定 + 金额审批」，不再二次进入 amount-approval；
+ * 3. 支持审批时微调商品数量（payload.adjustQuantities: { itemId: newQty }），以及填写审批/驳回意见（payload.note）。
+ */
 function permissionFor(stage, order) {
   if (stage === 'order-review' || stage === 'budget-region') return 'region';
   if (stage === 'amount-approval') return order.tier === 'region' ? 'region' : 'central';
   return 'central';
+}
+
+function applyApprovalQtyAdjust(state, order, adjustMap) {
+  if (!adjustMap || typeof adjustMap !== 'object') return [];
+  const changes = [];
+  (order.items || []).forEach(function (item) {
+    if (adjustMap[item.id] === undefined) return;
+    const nextQty = Number(adjustMap[item.id]);
+    if (!Number.isSafeInteger(nextQty) || nextQty < 1 || nextQty > 9999) {
+      throw new Error(item.name + ' 调整后的数量须为 1 至 9999 的整数');
+    }
+    if (nextQty !== item.qty) {
+      changes.push(item.name + ' ' + item.qty + '→' + nextQty);
+      item.qty = nextQty;
+    }
+  });
+  if (!changes.length) return [];
+  let sumCents = 0;
+  (order.items || []).forEach(function (item) {
+    sumCents += cents(item.price) * Number(item.qty || 0);
+  });
+  order.total = round2(sumCents / 100);
+  // 重算预算超额与档位
+  const ac = approvalConfigOf(state);
+  const split = splitOrder(order);
+  let overCents = 0;
+  BUDGET.KEYS.forEach(function (k) {
+    if (split[k].total <= 0) return;
+    const usable = storeUsableCents(state, order.store, order.id, k);
+    overCents += Math.max(0, cents(split[k].total) - usable);
+  });
+  order.overAmount = round2(overCents / 100);
+  order.overPending = overCents > 0 && !order.budgetApproved;
+  const activeKeys = BUDGET.KEYS.filter(function (k) { return split[k].total > 0; });
+  const recentCents = ac.splitGuard ? recentStoreCents(state, order.store, ac.splitDays, order.id, activeKeys) : 0;
+  const basisCents = sumCents + recentCents;
+  order.tier = basisCents <= cents(ac.autoMax) ? 'auto' : basisCents <= cents(ac.regionMax) ? 'region' : 'central';
+  return changes;
 }
 
 function approveOrder(state, session, payload) {
@@ -957,6 +1757,11 @@ function approveOrder(state, session, payload) {
   }
   if (permitted === 'region' && order.zone !== session.zone) throw new Error('当前身份仅可审批' + session.zone + '的订单');
 
+  const remark = String(payload.note || payload.reason || '').trim().slice(0, 200);
+  if (!payload.pass && payload.requireReason && remark.length < 2) {
+    throw new Error('请填写至少2个字的驳回原因');
+  }
+
   const original = order.status;
   let who = ({
     'order-review': '战区负责人',
@@ -966,26 +1771,33 @@ function approveOrder(state, session, payload) {
   who = who + '（' + session.id + '，模拟）';
   let note = '';
 
+  const qtyChanges = payload.pass ? applyApprovalQtyAdjust(state, order, payload.adjustQuantities) : [];
+  const ac = approvalConfigOf(state);
+
   if (!payload.pass) {
     // 若此前已核定追加预算（金额审批阶段被驳回），额度要退回机动预算
     const reverted = revertBudgetTransfer(state, order);
     order.status = 'rejected';
     order.overPending = false;
-    note = '审批驳回；演示环境不会发送供应商' + (reverted ? '；退回追加预算 ' + reverted.toFixed(2) + ' 元' : '');
+    if (remark) order.rejectReason = remark;
+    note = (remark ? '驳回原因：' + remark + '；' : '审批驳回；') +
+      '演示环境不会发送供应商' + (reverted ? '；退回追加预算 ' + reverted.toFixed(2) + ' 元' : '');
   } else if (stage === 'order-review') {
     order.regionApproved = true;
     if (order.overPending) {
-      // 战区同意采购，但额度不够：转运营管理部核定（追加机动池 / 门店间调剂）
+      // 战区同意采购，但额度不够：转运营管理部一步核定（追加机动池 / 门店间调剂 + 金额终审）
       order.status = 'budget-central';
       note = '战区审核通过；超出科目额度，转运营管理部核定预算';
     } else if (order.tier === 'auto') {
       order.status = 'supplier';
-      note = '战区审核通过；500元以内免金额审批，直接发送供应商';
+      note = '战区审核通过；≤¥' + fmt.money(ac.autoMax) + ' 免金额审批，直接发送供应商';
+    } else if (order.tier === 'region') {
+      // 优化：500–2000 元预算内订单由战区一步终审（合规 + 金额合并），免去同一人二次点击
+      order.status = 'supplier';
+      note = '战区一步终审通过（含 ¥' + fmt.money(ac.autoMax) + '–' + fmt.money(ac.regionMax) + ' 金额审批），已发送供应商';
     } else {
       order.status = 'amount-approval';
-      note = order.tier === 'region'
-        ? '战区审核通过；500-2000元，转战区金额审批'
-        : '战区审核通过；2000元以上，转运营管理部金额审批';
+      note = '战区审核通过；>¥' + fmt.money(ac.regionMax) + '，转运营管理部金额审批';
     }
   } else if (stage === 'budget-region') {
     order.regionApproved = true;
@@ -1004,6 +1816,7 @@ function approveOrder(state, session, payload) {
     const added = applyGapBudget(state, order, gap);
     order.budgetApproved = true;
     order.overPending = false;
+    order.centralApproved = true;
     order.budgetSplit = (function () {
       const s = splitOrder(order);
       const out = {};
@@ -1012,13 +1825,18 @@ function approveOrder(state, session, payload) {
       });
       return out;
     })();
-    order.status = order.tier === 'auto' ? 'supplier' : 'amount-approval';
+    // 优化：运营管理部既是预算核定人也是最高金额审批人，一步完成核定并直发供应商
+    order.status = 'supplier';
     note = (added > 0 ? '追加预算（模拟）：' + fmt.money(added) + '元；' : '额度内核定；') +
-      (order.status === 'supplier' ? '免金额审批，待供应商接单' : '继续采购金额审批');
+      '中台一步完成预算核定与金额审批，待供应商接单';
   } else if (stage === 'amount-approval') {
+    order.centralApproved = order.tier === 'central' || order.centralApproved;
     order.status = 'supplier';
     note = order.tier === 'region' ? '战区金额审批通过' : '中台金额审批通过';
   }
+
+  if (qtyChanges.length) note = '调整数量（' + qtyChanges.join('、') + '）；' + note;
+  if (payload.pass && remark) note = note + '；审批意见：' + remark;
 
   const now = new Date().toISOString();
   if (order.status !== original) {
@@ -1037,6 +1855,36 @@ function approveOrder(state, session, payload) {
       role: who, from: original, to: order.status, note: note, at: now
     }
   };
+}
+
+// 批量通过当前审批人名下所有「预算内（无缺口）」待审门店单
+function batchApproveOrders(state, session, payload) {
+  if (!session || ['region', 'central'].indexOf(session.role) < 0) {
+    throw new Error('当前身份无批量审批权限');
+  }
+  const p = payload || {};
+  const ids = Array.isArray(p.orderIds) && p.orderIds.length
+    ? p.orderIds
+    : pendingApprovals(state, session)
+        .filter(function (o) { return o.status !== 'dept-approval' && !o.overPending; })
+        .map(function (o) { return o.id; });
+  if (!ids.length) throw new Error('没有符合批量通过条件的预算内待审订单');
+  const audits = [];
+  const orders = [];
+  ids.forEach(function (id) {
+    const o = (state.orders || []).filter(function (x) { return x.id === id; })[0];
+    if (!o || o.status === 'dept-approval' || o.overPending) return;
+    const res = approveOrder(state, session, {
+      orderId: o.id,
+      stage: o.status,
+      pass: true,
+      note: p.note || '批量审批通过'
+    });
+    orders.push(res.order);
+    audits.push(res.audit);
+  });
+  if (!orders.length) throw new Error('没有可批量通过的订单');
+  return { count: orders.length, orders: orders, audits: audits };
 }
 
 /* ------------------------- 撤销 ------------------------- */
@@ -1107,6 +1955,7 @@ function closeOrder(state, session, payload) {
   const reason = String(payload.reason || '').trim().slice(0, 120);
   const released = !order.overPending ? Math.round(Number(order.total || 0) * 100) : 0;
   const reverted = revertBudgetTransfer(state, order);
+  const from = order.status;
   order.status = 'cancelled';
   order.overPending = false;
   order.cancelledBy = session.id;
@@ -1117,7 +1966,7 @@ function closeOrder(state, session, payload) {
     released: released / 100,
     audit: {
       orderId: order.id, kind: 'cancel', stage: 'cancel', decision: '关闭订单',
-      role: '运营管理部（' + session.id + '，模拟）', from: 'supplier', to: 'cancelled',
+      role: '运营管理部（' + session.id + '，模拟）', from: from, to: 'cancelled',
       note: order.closeReason + '；释放占用金额 ' + (released / 100).toFixed(2) + ' 元' +
         (reverted ? '；退回追加预算 ' + reverted.toFixed(2) + ' 元' : ''),
       at: order.cancelledAt
@@ -1143,8 +1992,8 @@ function supplierAck(state, session, payload) {
   if (!session || session.role !== 'supplier' || !session.supplier) throw new Error('请切换为供应商身份');
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
   if (!order) throw new Error('找不到订单，请刷新后重试');
-  if (['order-review', 'cancelled', 'rejected', 'budget-region', 'budget-central', 'amount-approval', 'dept-approval'].indexOf(order.status) >= 0) {
-    throw new Error('订单未正式发出，无法接单');
+  if (['supplier', 'preparing', 'delivering', 'partial'].indexOf(order.status) < 0) {
+    throw new Error('当前订单状态（' + fmt.statusLabel(order.status) + '）不允许接单操作');
   }
   const sub = (order.supplierRecords || {})[session.supplier];
   if (!sub) throw new Error('订单不属于当前测试供应商');
@@ -1181,7 +2030,9 @@ function reopenSupplierAck(state, session, payload) {
   if (!session || session.role !== 'supplier' || !session.supplier) throw new Error('请切换为供应商身份');
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
   if (!order) throw new Error('找不到订单，请刷新后重试');
-  if (['cancelled', 'rejected'].indexOf(order.status) >= 0) throw new Error('订单已关闭，无法撤回');
+  if (['supplier', 'preparing', 'delivering', 'partial'].indexOf(order.status) < 0) {
+    throw new Error('当前订单状态（' + fmt.statusLabel(order.status) + '）不允许撤回拒单');
+  }
   const sub = (order.supplierRecords || {})[session.supplier];
   if (!sub) throw new Error('订单不属于当前测试供应商');
   if (sub.status !== 'issue') throw new Error('该订单当前没有待处理的拒单记录');
@@ -1212,10 +2063,13 @@ function supplierDeliver(state, session, payload) {
   if (!session || session.role !== 'supplier' || !session.supplier) throw new Error('请切换为供应商身份');
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
   if (!order) throw new Error('找不到订单，请刷新后重试');
+  if (['supplier', 'preparing', 'delivering', 'partial'].indexOf(order.status) < 0) {
+    throw new Error('当前订单状态（' + fmt.statusLabel(order.status) + '）不允许登记发货');
+  }
   const supplier = session.supplier;
   const sub = (order.supplierRecords || {})[supplier];
   if (!sub) throw new Error('该订单不属于当前模拟供应商');
-  if (sub.status !== 'confirmed') throw new Error('请先确认接单，再登记配送');
+  if (['confirmed', 'shipping'].indexOf(sub.status) < 0) throw new Error('请先确认接单，再登记配送');
   if (!Array.isArray(payload.lines) || !payload.lines.length) throw new Error('请选择本次交付的商品');
 
   const shipping = payload.shipping || {};
@@ -1404,10 +2258,13 @@ function acceptDelivery(state, session, payload) {
   } else {
     if (!Array.isArray(order.acceptanceIssues)) order.acceptanceIssues = [];
     order.acceptanceIssues.push({
+      id: 'ISS-' + uid(), status: 'open',
       at: now, by: session.id, byName: session.name, supplier: payload.supplier,
       batchNo: payload.batchNo, note: note, result: 'issue', evidenceId: evidenceId, photoPath: payload.photoPath,
       noPhoto: noPhoto
     });
+    const subRec = (order.supplierRecords || {})[payload.supplier];
+    if (subRec) subRec.hasAcceptanceIssue = true;
   }
   order.stageStartedAt = now;
   return {
@@ -1426,6 +2283,127 @@ function acceptDelivery(state, session, payload) {
   };
 }
 
+function hasOpenAcceptanceIssue(order, supplier) {
+  if (!order || !Array.isArray(order.acceptanceIssues)) return false;
+  return order.acceptanceIssues.some(function (iss) {
+    if (supplier && iss.supplier && iss.supplier !== supplier) return false;
+    return iss.status === 'open' || (!iss.status && !iss.resolvedAt);
+  });
+}
+
+function resolveAcceptanceIssue(state, session, payload) {
+  const p = payload || {};
+  const order = (state.orders || []).filter(function (o) { return o.id === p.orderId; })[0];
+  if (!order) throw new Error('找不到订单');
+  const isSup = session && session.role === 'supplier' && !!(order.supplierRecords || {})[session.supplier];
+  const isCentral = session && session.role === 'central';
+  const isReceiver = canAcceptOrder(order, session);
+  if (!isSup && !isCentral && !isReceiver) throw new Error('无权处理该订单的验收异常');
+
+  const plan = String(p.plan || 'reship');
+  const PLAN_NAME = { reship: '安排补发', discount: '转结算折让', resolved: '协商结案' };
+  if (!PLAN_NAME[plan]) throw new Error('请选择处理方案');
+  const reply = String(p.reply || '').trim();
+  if (reply.length < 2 || reply.length > 300) throw new Error('请填写 2 至 300 字的处理说明');
+
+  const issues = order.acceptanceIssues || [];
+  let target = null;
+  if (p.issueId) target = issues.filter(function (x) { return x.id === p.issueId; })[0];
+  if (!target) {
+    const sup = isSup ? session.supplier : (p.supplier || '');
+    target = issues.filter(function (x) {
+      return (!sup || x.supplier === sup) && (x.status === 'open' || (!x.status && !x.resolvedAt));
+    }).slice(-1)[0];
+  }
+  if (!target) throw new Error('未找到待处理的验收异常记录');
+  if (isSup && target.supplier && target.supplier !== session.supplier) throw new Error('只能处理本供应商名下的异常记录');
+
+  const now = new Date().toISOString();
+  target.id = target.id || ('ISS-' + uid());
+  target.status = 'resolved';
+  target.plan = plan;
+  target.planLabel = PLAN_NAME[plan];
+  target.reply = reply;
+  target.resolvedAt = now;
+  target.resolvedBy = session.name || session.id;
+  target.resolvedRole = session.role;
+
+  const supName = target.supplier;
+  if (supName && order.supplierRecords && order.supplierRecords[supName]) {
+    order.supplierRecords[supName].hasAcceptanceIssue = hasOpenAcceptanceIssue(order, supName);
+  }
+  return {
+    order: order,
+    issue: target,
+    audit: {
+      orderId: order.id, kind: 'accept', stage: 'issue-resolve',
+      decision: '处理验收异常（' + PLAN_NAME[plan] + '）',
+      role: (isSup ? '供应商（' + session.supplier + '）' : session.name + '（' + session.id + '）'),
+      from: order.status, to: order.status,
+      note: '第' + (target.batchNo || 1) + '批异常：' + reply, at: now
+    }
+  };
+}
+
+/* ------------------------- 短收结案（部分到货不再补发时，按已验收数量结案进入结算） ------------------------- */
+function finalizeShortDelivery(state, session, payload) {
+  const order = (state.orders || []).filter(function (o) { return o.id === (payload && payload.orderId); })[0];
+  if (!order) throw new Error('找不到订单');
+  if (['partial', 'delivering', 'delivered'].indexOf(order.status) < 0) {
+    throw new Error('仅部分验收或配送中的订单可办理短收结案');
+  }
+  const canAct = (session && session.role === 'central') || !!settleActorOf(order, session);
+  if (!canAct) throw new Error('请由收货门店/部门或运营管理部办理短收结案');
+  const totalAccepted = (order.items || []).reduce(function (s, x) { return s + Number(x.accepted || 0); }, 0);
+  if (totalAccepted <= 0) throw new Error('尚未验收任何商品，若整单取消请走关闭订单');
+  const reason = String((payload && payload.reason) || '').trim();
+  if (reason.length < 4 || reason.length > 200) throw new Error('请填写4至200字的短收结案原因');
+
+  const now = new Date().toISOString();
+  const shortLines = [];
+  let sumCents = 0;
+  (order.items || []).forEach(function (x) {
+    const acc = Number(x.accepted || 0);
+    if (acc < x.qty) {
+      shortLines.push(x.name + ' ' + x.qty + '→' + acc);
+      x.originalQty = x.originalQty || x.qty;
+      x.qty = acc;
+      x.deliveredQty = acc;
+    }
+    sumCents += cents(x.price) * acc;
+  });
+  if (!shortLines.length) throw new Error('该订单已全部验收，无需短收结案');
+
+  const from = order.status;
+  order.total = round2(sumCents / 100);
+  order.shortClosed = { at: now, by: session.id, byName: session.name, reason: reason, lines: shortLines };
+  order.status = 'settle-pending';
+  order.stageStartedAt = now;
+  order.settlement = order.settlement || {};
+  order.settlement.status = 'pending-store';
+  order.settlement.itemsAmount = acceptedAmountOf(order);
+  order.settlement.readyAt = now;
+
+  Object.keys(order.supplierRecords || {}).forEach(function (sup) {
+    const r = order.supplierRecords[sup];
+    if (!r) return;
+    r.delivered = true;
+    r.status = 'accepted';
+    r.acceptedAt = r.acceptedAt || now;
+  });
+
+  return {
+    order: order,
+    audit: {
+      orderId: order.id, kind: 'accept', stage: 'short-close',
+      decision: '短收结案',
+      role: session.name + '（' + session.id + '）', from: from, to: order.status,
+      note: '按实收数量结案（' + shortLines.join('、') + '）；原因：' + reason,
+      at: now
+    }
+  };
+}
+
 /* ------------------------- 结算金额共同确认 ------------------------- */
 // 按实收数量折算的应结金额（部分验收只算已收部分，未到货不计）
 function acceptedAmountOf(order) {
@@ -1433,6 +2411,46 @@ function acceptedAmountOf(order) {
     return s + cents(Number(x.accepted || 0) * Number(x.price || 0));
   }, 0);
   return round2(total / 100);
+}
+
+function acceptedBySupplierOf(order) {
+  const out = {};
+  (order.items || []).forEach(function (x) {
+    const sup = x.supplier || '未指定供应商';
+    out[sup] = (out[sup] || 0) + cents(Number(x.accepted || 0) * Number(x.price || 0));
+  });
+  Object.keys(out).forEach(function (k) { out[k] = round2(out[k] / 100); });
+  return out;
+}
+
+// 各供应商已确认的实际结算金额（元）；仅在 settlement.status === 'confirmed' 时返回映射
+function settlementBySupplierOf(order) {
+  const out = {};
+  const settle = order && order.settlement;
+  if (!settle || settle.status !== 'confirmed' || !isFinite(Number(settle.amount))) return out;
+  const bySupRaw = acceptedBySupplierOf(order);
+  const sups = Object.keys(bySupRaw);
+  if (settle.bySupplier && typeof settle.bySupplier === 'object') {
+    let covered = true;
+    sups.forEach(function (s) {
+      if (!isFinite(Number(settle.bySupplier[s]))) covered = false;
+      else out[s] = round2(settle.bySupplier[s]);
+    });
+    if (covered && sups.length) return out;
+  }
+  const allAcceptedCents = cents(acceptedAmountOf(order));
+  const targetCents = cents(settle.amount);
+  let allocated = 0;
+  sups.forEach(function (s, idx) {
+    if (idx === sups.length - 1) {
+      out[s] = round2((targetCents - allocated) / 100);
+    } else {
+      const share = allAcceptedCents > 0 ? Math.round(targetCents * (cents(bySupRaw[s]) / allAcceptedCents)) : 0;
+      allocated += share;
+      out[s] = round2(share / 100);
+    }
+  });
+  return out;
 }
 
 // 谁能对这笔单发起结算：门店单看门店；部门单看收货方式（送门店由门店结，送总部由部门结）
@@ -1447,7 +2465,7 @@ function settleActorOf(order, session) {
   return session.role === 'store' && session.stores.indexOf(order.store) >= 0 ? 'store' : null;
 }
 
-// 门店/部门发起：填实际结算金额，允许与「实收数量 × 单价」不同（少发、退款、质量问题折让）
+// 门店/部门发起：填实际结算金额（支持按整单 amount 或分供应商 bySupplier），允许与实收不同
 function submitSettlement(state, session, payload) {
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
   if (!order) throw new Error('找不到这笔订单，请刷新后重试');
@@ -1457,10 +2475,29 @@ function submitSettlement(state, session, payload) {
   const actor = settleActorOf(order, session);
   if (!actor) throw new Error('只有收货方可发起结算确认');
 
-  const amount = round2(Number(payload.amount));
+  const orderSuppliers = [];
+  (order.items || []).forEach(function (x) {
+    if (x.supplier && orderSuppliers.indexOf(x.supplier) < 0) orderSuppliers.push(x.supplier);
+  });
+
+  let bySupplier = null;
+  let amount = 0;
+  if (payload.bySupplier && typeof payload.bySupplier === 'object') {
+    bySupplier = {};
+    let sumCents = 0;
+    orderSuppliers.forEach(function (sup) {
+      const val = round2(Number(payload.bySupplier[sup]));
+      if (!isFinite(val) || val <= 0) throw new Error('「' + sup + '」结算金额需大于 0');
+      bySupplier[sup] = val;
+      sumCents += cents(val);
+    });
+    amount = round2(sumCents / 100);
+  } else {
+    amount = round2(Number(payload.amount));
+  }
   if (!isFinite(amount) || amount <= 0) throw new Error('结算金额需大于 0');
   const cap = cents(Number(order.total || 0)) / 100;
-  if (cents(amount) > Math.round(cap * 100) + 0) throw new Error('结算金额不能超过订单金额 ¥' + fmt.money(cap));
+  if (cents(amount) > Math.round(cap * 100)) throw new Error('结算金额不能超过订单金额 ¥' + fmt.money(cap));
 
   const itemsAmount = acceptedAmountOf(order);
   const diff = round2(amount - itemsAmount);
@@ -1478,12 +2515,15 @@ function submitSettlement(state, session, payload) {
     itemsAmount: itemsAmount,
     diff: diff,
     reason: reason,
+    bySupplier: bySupplier,
     by: session.id,
     byName: session.name,
     byRole: actor,
     round: round,
     submittedAt: now,
     readyAt: (order.settlement && order.settlement.readyAt) || now,
+    suppliers: orderSuppliers,
+    confirmedBySuppliers: {},
     disputes: (order.settlement && order.settlement.disputes) || []
   };
   const from = order.status;
@@ -1502,7 +2542,7 @@ function submitSettlement(state, session, payload) {
   };
 }
 
-// 供应商确认或提出异议；异议退回门店重新核对，双方一致后才进入待对账
+// 供应商确认或提出异议；多供应商订单需所有相关供应商全部确认后才进入待对账
 function settleAction(state, session, payload) {
   if (!session || session.role !== 'supplier') throw new Error('请使用供应商身份确认结算');
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
@@ -1519,20 +2559,35 @@ function settleAction(state, session, payload) {
   const from = order.status;
 
   if (payload.action === 'confirm') {
-    settle.status = 'confirmed';
-    settle.confirmedAt = now;
-    settle.confirmedBy = session.id;
-    order.settlement = settle;
-    order.status = 'accepted';
-    order.stageStartedAt = now;
+    const orderSuppliers = [];
+    (order.items || []).forEach(function (x) {
+      if (x.supplier && orderSuppliers.indexOf(x.supplier) < 0) orderSuppliers.push(x.supplier);
+    });
+    if (!settle.confirmedBySuppliers || typeof settle.confirmedBySuppliers !== 'object') {
+      settle.confirmedBySuppliers = {};
+    }
+    settle.confirmedBySuppliers[session.supplier] = { by: session.id, at: now };
     const rec = (order.supplierRecords || {})[session.supplier];
     if (rec) rec.settledAt = now;
+
+    const allConfirmed = orderSuppliers.every(function (sup) {
+      return !!settle.confirmedBySuppliers[sup];
+    });
+    if (allConfirmed) {
+      settle.status = 'confirmed';
+      settle.confirmedAt = now;
+      settle.confirmedBy = session.id;
+      order.status = 'accepted';
+      order.stageStartedAt = now;
+    }
+    order.settlement = settle;
     return {
       order: order,
+      allConfirmed: allConfirmed,
       audit: {
         orderId: order.id, kind: 'settle', stage: 'settle-confirm', decision: '供应商确认结算',
         role: '供应商（' + session.supplier + '）', from: from, to: order.status,
-        note: '确认结算金额 ¥' + fmt.money(settle.amount), at: now
+        note: '确认结算金额 ¥' + fmt.money(settle.amount) + (allConfirmed ? '' : '（等待其余供应商确认）'), at: now
       }
     };
   }
@@ -1557,15 +2612,11 @@ function settleAction(state, session, payload) {
 }
 
 /* ------------------------- 对账 ------------------------- */
-function createReconciliation(state, session, payload) {
-  if (!session || session.role !== 'central') throw new Error('仅运营管理部可生成对账单');
-  const supplier = String(payload.supplier || '').trim();
-  const period = String(payload.period || '').trim();
-  if (!supplier) throw new Error('请先选择一家供应商');
-  if (!period || period.length > 80) throw new Error('请输入对账周期');
+function collectPendingReconLines(state, supplier) {
   const lines = [];
   state.orders.forEach(function (o) {
-    // 结算金额尚未经双方确认的订单，暂不纳入对账
+    // 只有已完成验收且结算金额经双方确认（状态为 accepted / done）的订单才可纳入对账
+    if (['accepted', 'done'].indexOf(o.status) < 0) return;
     if (o.settlement && o.settlement.status !== 'confirmed') return;
     const own = [];
     (o.items || []).forEach(function (item) {
@@ -1580,24 +2631,31 @@ function createReconciliation(state, session, payload) {
       }
     });
     if (!own.length) return;
-    // 已共同确认的结算金额按确认值入账；与「实收 × 单价」的差额单列一行，保证对账合计 = 结算金额
-    const settle = o.settlement && o.settlement.status === 'confirmed' ? o.settlement : null;
-    if (settle) {
+    // 已共同确认的结算金额按确认值入账；优先取分供应商专属结算额
+    const settleMap = settlementBySupplierOf(o);
+    if (settleMap[supplier] !== undefined) {
       const lineSum = own.reduce(function (s, x) { return s + Math.round(x.amount * 100); }, 0) / 100;
-      // 一张单可能含多家供应商：按本供应商已验收金额占比分摊整单结算金额
-      const allAccepted = acceptedAmountOf(o);
-      const share = allAccepted > 0 ? Math.min(1, lineSum / allAccepted) : 1;
-      const target = Math.round(settle.amount * share * 100) / 100;
+      const target = settleMap[supplier];
       const gap = Math.round((target - lineSum) * 100) / 100;
       if (Math.round(gap * 100) !== 0) {
         own.push({
           order: o.id, store: o.store, supplier: supplier, name: '结算差异调整',
-          id: '', n: 0, price: 0, amount: gap, adjust: true, reason: settle.reason || ''
+          id: '', n: 0, price: 0, amount: gap, adjust: true, reason: (o.settlement && o.settlement.reason) || ''
         });
       }
     }
     lines.push.apply(lines, own);
   });
+  return lines;
+}
+
+function createReconciliation(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可生成对账单');
+  const supplier = String(payload.supplier || '').trim();
+  const period = String(payload.period || '').trim();
+  if (!supplier) throw new Error('请先选择一家供应商');
+  if (!period || period.length > 80) throw new Error('请输入对账周期');
+  const lines = collectPendingReconLines(state, supplier);
   if (!lines.length) throw new Error('该供应商没有待对账的已验收明细');
   const existing = (state.recons || []).map(function (r) {
     const m = String(r.id || '').match(/^DZ-(\d+)$/);
@@ -1607,7 +2665,7 @@ function createReconciliation(state, session, payload) {
   const id = 'DZ-' + String(num).padStart(3, '0');
   const total = Math.round(lines.reduce(function (sum, x) { return sum + Math.round(x.amount * 100); }, 0)) / 100;
   const now = new Date().toISOString();
-  const rec = { id: id, supplier: supplier, period: period, lines: lines, total: total, status: 'supplier-pending', createdAt: now, createdBy: session.id };
+  const rec = { id: id, supplier: supplier, period: period, lines: lines, total: total, status: 'supplier-pending', round: 1, createdAt: now, createdBy: session.id };
   if (!Array.isArray(state.recons)) state.recons = [];
   state.recons.unshift(rec);
   lines.forEach(function (line) {
@@ -1623,18 +2681,22 @@ function reconAction(state, session, payload) {
   const id = String(payload.reconId || '');
   const action = String(payload.action || '');
   if (!/^DZ-[0-9]{3,10}$/.test(id)) throw new Error('对账单编号不正确');
-  if (['confirm', 'dispute', 'lock'].indexOf(action) < 0) throw new Error('不支持的操作');
+  if (['confirm', 'dispute', 'lock', 'reopen', 'void'].indexOf(action) < 0) throw new Error('不支持的操作');
   const note = String(payload.note || '').trim();
   if (action === 'dispute' && (note.length < 2 || note.length > 300)) throw new Error('请输入2至300字的差异原因');
-  if (action === 'lock' && (!session || session.role !== 'central')) throw new Error('仅运营管理部可锁定对账单');
-  if (action !== 'lock' && (!session || session.role !== 'supplier')) throw new Error('请使用供应商身份确认对账');
+  const isCentralAct = ['lock', 'reopen', 'void'].indexOf(action) >= 0;
+  if (isCentralAct && (!session || session.role !== 'central')) throw new Error('仅运营管理部可执行此对账操作');
+  if (!isCentralAct && (!session || session.role !== 'supplier')) throw new Error('请使用供应商身份确认对账');
 
   const rec = (state.recons || []).filter(function (x) { return x.id === id; })[0];
   if (!rec) throw new Error('找不到对账单');
-  if (action !== 'lock' && rec.supplier !== session.supplier) throw new Error('不能处理其他供应商的对账单');
+  if (!isCentralAct && rec.supplier !== session.supplier) throw new Error('不能处理其他供应商的对账单');
   if (action === 'lock' && rec.status !== 'supplier-confirmed') throw new Error('必须由供应商先确认对账单');
-  if (action !== 'lock' && rec.status !== 'supplier-pending') throw new Error('对账单当前不能重复确认或提出差异');
+  if (!isCentralAct && rec.status !== 'supplier-pending') throw new Error('对账单当前不能重复确认或提出差异');
+  if (action === 'reopen' && rec.status !== 'disputed') throw new Error('仅存在差异的对账单可重新发起');
+  if (action === 'void' && ['disputed', 'supplier-pending'].indexOf(rec.status) < 0) throw new Error('仅未确认或有差异的对账单可作废');
   const now = new Date().toISOString();
+  const prevStatus = rec.status;
 
   if (action === 'dispute') {
     rec.status = 'disputed';
@@ -1646,6 +2708,40 @@ function reconAction(state, session, payload) {
       const item = order ? order.items.filter(function (x) { return x.id === line.id; })[0] : null;
       if (!item || Number(item.reconPending || 0) < line.n) throw new Error('对账暂占数据不一致');
       item.reconPending -= line.n;
+    });
+  } else if (action === 'void') {
+    if (prevStatus === 'supplier-pending') {
+      rec.lines.forEach(function (line) {
+        if (!line.id) return;
+        const order = state.orders.filter(function (o) { return o.id === line.order; })[0];
+        const item = order ? order.items.filter(function (x) { return x.id === line.id; })[0] : null;
+        if (item && Number(item.reconPending || 0) >= line.n) item.reconPending -= line.n;
+      });
+    }
+    rec.status = 'voided';
+    rec.voidedAt = now;
+    rec.voidedBy = session.id;
+    rec.voidReason = note || '核查差异后作废';
+  } else if (action === 'reopen') {
+    const freshLines = collectPendingReconLines(state, rec.supplier);
+    if (!freshLines.length) throw new Error('该供应商当前没有可对账的明细，若不再对账请点击「作废」');
+    if (rec.disputeNote) {
+      rec.disputeHistory = rec.disputeHistory || [];
+      rec.disputeHistory.push({ note: rec.disputeNote, at: rec.disputedAt, round: rec.round || 1 });
+    }
+    rec.lines = freshLines;
+    rec.total = Math.round(freshLines.reduce(function (sum, x) { return sum + Math.round(x.amount * 100); }, 0)) / 100;
+    rec.round = (rec.round || 1) + 1;
+    rec.status = 'supplier-pending';
+    rec.reopenedAt = now;
+    rec.reopenedBy = session.id;
+    rec.reopenNote = note || '核对调整后重发对账';
+    rec.disputeNote = '';
+    freshLines.forEach(function (line) {
+      if (!line.id) return;
+      const order = state.orders.filter(function (o) { return o.id === line.order; })[0];
+      const item = order && order.items.filter(function (x) { return x.id === line.id; })[0];
+      if (item) item.reconPending = Number(item.reconPending || 0) + line.n;
     });
   } else if (action === 'confirm') {
     rec.status = 'supplier-confirmed';
@@ -1718,7 +2814,91 @@ function slaForOrder(state, orderId) {
   return rows.sort(function (a, b) { return b.hours - a.hours; })[0];
 }
 
-/* ------------------------- 统计 ------------------------- */
+/* ------------------------- 统计（对齐最终结算金额口径 + 合同×预算科目总表） ------------------------- */
+// 按「已共同确认的最终结算金额」分摊每条明细的有效已验收与已对账金额（元），保证统计看板与对账单分毫不差
+function effectiveOrderLineAmounts(order) {
+  const items = order.items || [];
+  const settleMap = settlementBySupplierOf(order);
+  const bySup = {};
+  items.forEach(function (line, idx) {
+    const sup = line.supplier || '未指定供应商';
+    if (!bySup[sup]) bySup[sup] = { rows: [], rawAccCents: 0, accUnits: 0, recUnits: 0 };
+    const price = Number(line.price || 0);
+    const accQty = Number(line.accepted || 0);
+    const recQty = Number(line.reconciled || 0);
+    const reqCents = cents(Number(line.qty || 0) * price);
+    const accCents = cents(accQty * price);
+    const recCents = cents(recQty * price);
+    bySup[sup].rows.push({ idx: idx, line: line, sup: sup, reqCents: reqCents, accCents: accCents, recCents: recCents });
+    bySup[sup].rawAccCents += accCents;
+    bySup[sup].accUnits += accQty;
+    bySup[sup].recUnits += recQty;
+  });
+
+  const result = new Array(items.length);
+  Object.keys(bySup).forEach(function (sup) {
+    const grp = bySup[sup];
+    const hasSettled = settleMap[sup] !== undefined;
+    const settledCents = hasSettled ? cents(settleMap[sup]) : grp.rawAccCents;
+    const allRec = grp.accUnits > 0 && grp.recUnits === grp.accUnits;
+    const targetRecCents = hasSettled
+      ? (allRec ? settledCents : (grp.rawAccCents > 0 ? Math.round(settledCents * grp.rows.reduce(function (s, r) { return s + r.recCents; }, 0) / grp.rawAccCents) : 0))
+      : grp.rows.reduce(function (s, r) { return s + r.recCents; }, 0);
+
+    let accAlloc = 0;
+    let recAlloc = 0;
+    const activeAccRows = grp.rows.filter(function (r) { return r.accCents > 0; });
+    const lastAccIdx = activeAccRows.length ? activeAccRows[activeAccRows.length - 1].idx : -1;
+    const activeRecRows = grp.rows.filter(function (r) { return r.recCents > 0; });
+    const lastRecIdx = activeRecRows.length ? activeRecRows[activeRecRows.length - 1].idx : -1;
+
+    grp.rows.forEach(function (r) {
+      const p = CATALOG_BY_ID[r.line.id];
+      const key = BUDGET.itemOf(r.line.budgetItem ? r.line : (p || r.line));
+      let effAcc = r.accCents;
+      if (hasSettled) {
+        if (r.idx === lastAccIdx) effAcc = Math.max(0, settledCents - accAlloc);
+        else if (r.accCents > 0 && grp.rawAccCents > 0) {
+          effAcc = Math.round(settledCents * (r.accCents / grp.rawAccCents));
+          accAlloc += effAcc;
+        } else effAcc = 0;
+      }
+      let effRec = r.recCents;
+      if (hasSettled) {
+        const sumRawRec = grp.rows.reduce(function (s, x) { return s + x.recCents; }, 0);
+        if (r.idx === lastRecIdx) effRec = Math.max(0, targetRecCents - recAlloc);
+        else if (r.recCents > 0 && sumRawRec > 0) {
+          effRec = Math.round(targetRecCents * (r.recCents / sumRawRec));
+          recAlloc += effRec;
+        } else effRec = 0;
+      }
+      result[r.idx] = {
+        supplier: sup,
+        budgetKey: key,
+        requested: round2(r.reqCents / 100),
+        accepted: round2(effAcc / 100),
+        reconciled: round2(effRec / 100)
+      };
+    });
+  });
+  return result;
+}
+
+function effectiveOrderAmounts(order) {
+  const lines = effectiveOrderLineAmounts(order);
+  let acc = 0, rec = 0;
+  lines.forEach(function (l) {
+    if (!l) return;
+    acc += cents(l.accepted);
+    rec += cents(l.reconciled);
+  });
+  return {
+    requested: round2(Number(order.total || 0)),
+    accepted: round2(acc / 100),
+    reconciled: round2(rec / 100)
+  };
+}
+
 function reportSummary(state) {
   const valid = (state.orders || []).filter(function (o) { return ['rejected', 'cancelled'].indexOf(o.status) < 0; });
   const totals = { requests: (state.orders || []).length, activeOrders: valid.length, requested: 0, accepted: 0, reconciled: 0, unreconciledAccepted: 0 };
@@ -1734,26 +2914,24 @@ function reportSummary(state) {
     add(byZone, zone, 'requested', Number(order.total || 0));
     totals.requested += Number(order.total || 0);
     const seen = {};
-    (order.items || []).forEach(function (line) {
-      const supplier = line.supplier || '未指定供应商';
-      const price = Number(line.price || 0);
-      const accepted = Number(line.accepted || 0) * price;
-      const reconciled = Number(line.reconciled || 0) * price;
+    const effLines = effectiveOrderLineAmounts(order);
+    (order.items || []).forEach(function (line, idx) {
+      const eff = effLines[idx] || { supplier: line.supplier || '未指定供应商', requested: 0, accepted: 0, reconciled: 0 };
+      const supplier = eff.supplier;
       if (!seen[supplier]) { add(bySupplier, supplier, 'orders', 1); seen[supplier] = 1; }
-      add(bySupplier, supplier, 'requested', Number(line.qty || 0) * price);
-      add(bySupplier, supplier, 'accepted', accepted);
-      add(bySupplier, supplier, 'reconciled', reconciled);
-      add(byZone, zone, 'accepted', accepted);
-      add(byZone, zone, 'reconciled', reconciled);
-      totals.accepted += accepted;
-      totals.reconciled += reconciled;
+      add(bySupplier, supplier, 'requested', eff.requested);
+      add(bySupplier, supplier, 'accepted', eff.accepted);
+      add(bySupplier, supplier, 'reconciled', eff.reconciled);
+      add(byZone, zone, 'accepted', eff.accepted);
+      add(byZone, zone, 'reconciled', eff.reconciled);
+      totals.accepted += eff.accepted;
+      totals.reconciled += eff.reconciled;
     });
   });
   totals.unreconciledAccepted = Math.max(0, totals.accepted - totals.reconciled);
   Object.keys(totals).forEach(function (k) {
     if (!Number.isInteger(totals[k])) totals[k] = Math.round(totals[k] * 100) / 100;
   });
-  ['byZone', 'bySupplier'].forEach(function () {});
   return {
     totals: totals,
     byZone: Object.keys(byZone).map(function (k) {
@@ -1778,17 +2956,98 @@ function departmentSummary(state) {
     if (o.purchaseType !== 'department' || ['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
     const row = index[o.department];
     if (!row) return;
+    const eff = effectiveOrderAmounts(o);
     row.orders += 1;
-    row.requested += Number(o.total || 0);
-    (o.items || []).forEach(function (p) {
-      row.accepted += Number(p.accepted || 0) * Number(p.price || 0);
-      row.reconciled += Number(p.reconciled || 0) * Number(p.price || 0);
-    });
+    row.requested += eff.requested;
+    row.accepted += eff.accepted;
+    row.reconciled += eff.reconciled;
   });
   rows.forEach(function (r) {
     ['requested', 'accepted', 'reconciled'].forEach(function (k) { r[k] = Math.round(r[k] * 100) / 100; });
   });
   return rows;
+}
+
+// 2 份框架合同 × 3 大预算科目 财务核算汇总表
+function contractBudgetReport(state) {
+  const summaries = contractSummary(state);
+  const storeRows = budgetSummary(state, { role: 'central', stores: [] });
+  const effByContract = {};
+  const effByBudget = {};
+  BUDGET.KEYS.forEach(function (k) {
+    effByBudget[k] = { storeAccepted: 0, storeReconciled: 0, deptRequested: 0, deptAccepted: 0, deptReconciled: 0 };
+  });
+
+  (state.orders || []).forEach(function (o) {
+    if (['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
+    const effLines = effectiveOrderLineAmounts(o);
+    (o.items || []).forEach(function (line, idx) {
+      const eff = effLines[idx];
+      if (!eff) return;
+      const sup = eff.supplier;
+      if (!effByContract[sup]) effByContract[sup] = { accepted: 0, reconciled: 0 };
+      effByContract[sup].accepted += cents(eff.accepted);
+      effByContract[sup].reconciled += cents(eff.reconciled);
+
+      const b = effByBudget[eff.budgetKey];
+      if (!b) return;
+      if (o.purchaseType === 'department') {
+        b.deptRequested += cents(eff.requested);
+        b.deptAccepted += cents(eff.accepted);
+        b.deptReconciled += cents(eff.reconciled);
+      } else {
+        b.storeAccepted += cents(eff.accepted);
+        b.storeReconciled += cents(eff.reconciled);
+      }
+    });
+  });
+
+  const contracts = summaries.map(function (c) {
+    const ec = effByContract[c.supplier] || { accepted: 0, reconciled: 0 };
+    const accepted = round2(ec.accepted / 100);
+    const reconciled = round2(ec.reconciled / 100);
+    return Object.assign({}, c, {
+      accepted: accepted,
+      reconciled: reconciled,
+      inTransit: round2(Math.max(0, c.used - accepted))
+    });
+  });
+
+  const budgetItems = BUDGET.ITEMS.map(function (meta) {
+    const key = meta.key;
+    let storeBudget = 0, baseUsed = 0, storeOccupied = 0, storeSpent = 0, storeUsed = 0, storeAvailable = 0;
+    storeRows.forEach(function (sr) {
+      const it = (sr.items || []).filter(function (x) { return x.key === key; })[0];
+      if (!it) return;
+      storeBudget += cents(it.budget);
+      baseUsed += cents(it.baseUsed);
+      storeOccupied += cents(it.occupied);
+      storeSpent += cents(it.spent);
+      storeUsed += cents(it.used);
+      storeAvailable += cents(it.available);
+    });
+    const b = effByBudget[key] || { storeAccepted: 0, storeReconciled: 0, deptRequested: 0, deptAccepted: 0, deptReconciled: 0 };
+    const deptReq = round2(b.deptRequested / 100);
+    return {
+      key: key,
+      name: meta.name,
+      short: meta.short,
+      contract: meta.contract,
+      storeBudget: round2(storeBudget / 100),
+      baseUsed: round2(baseUsed / 100),
+      storeInTransit: round2(storeOccupied / 100),
+      storeAccepted: round2(b.storeAccepted / 100),
+      storeReconciled: round2(b.storeReconciled / 100),
+      storeUsed: round2(storeUsed / 100),
+      storeAvailable: round2(storeAvailable / 100),
+      deptRequested: deptReq,
+      deptAccepted: round2(b.deptAccepted / 100),
+      deptReconciled: round2(b.deptReconciled / 100),
+      totalUsed: round2((storeUsed + b.deptRequested) / 100)
+    };
+  });
+
+  return { contracts: contracts, budgetItems: budgetItems };
 }
 
 /* ------------------------- 预算占用 ------------------------- */
@@ -1888,6 +3147,7 @@ function budgetSummary(state, session) {
 // 按历史下单数量排序，为新单提供"一键复购"入口，不额外存储
 function frequentItems(state, session, limit) {
   if (!session || ['store', 'department', 'central'].indexOf(session.role) < 0) return [];
+  const catMap = catalogMapOf(state);
   const counts = {};
   (state.orders || []).forEach(function (o) {
     if (['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
@@ -1896,7 +3156,8 @@ function frequentItems(state, session, limit) {
       : (o.purchaseType === 'department' && o.department === session.department);
     if (!mine) return;
     (o.items || []).forEach(function (x) {
-      if (!CATALOG_BY_ID[x.id]) return;
+      const p = catMap[x.id];
+      if (!p || p.deleted || p.enabled === false) return;
       counts[x.id] = (counts[x.id] || 0) + Number(x.qty || 0);
     });
   });
@@ -1904,7 +3165,7 @@ function frequentItems(state, session, limit) {
     .sort(function (a, b) { return counts[b] - counts[a]; })
     .slice(0, limit || 6)
     .map(function (id) {
-      const p = CATALOG_BY_ID[id];
+      const p = catMap[id];
       return { id: id, name: p.name, spec: p.spec || '', unit: p.unit || '', price: p.price, times: counts[id] };
     });
 }
@@ -1972,12 +3233,16 @@ function pendingApprovals(state, session) {
   return [];
 }
 
-// 待确认结算：门店/部门待提交金额，供应商待确认金额
+// 待确认结算：门店/部门待提交金额，供应商待确认金额（多供应商订单仅展示尚未确认的供应商）
 function pendingSettleOrders(state, session) {
   if (!session) return [];
   const list = visibleOrders(state, session);
   if (session.role === 'supplier') {
-    return list.filter(function (o) { return o.status === 'settle-supplier'; });
+    return list.filter(function (o) {
+      if (o.status !== 'settle-supplier') return false;
+      const c = o.settlement && o.settlement.confirmedBySuppliers;
+      return !(c && c[session.supplier]);
+    });
   }
   return list.filter(function (o) {
     return ['settle-pending', 'settle-disputed'].indexOf(o.status) >= 0 && !!settleActorOf(o, session);
@@ -2005,10 +3270,14 @@ function actionCount(state, session) {
 
 module.exports = {
   CATALOG_BY_ID, SHIPPING_METHODS, INSTALL_REQUIRED, STORES,
+  catalogOf, catalogMapOf, suppliersOf, normalizeScope, canActorBuyItem, saveCatalogItem, toggleCatalogItem, setCatalogItemScope, deleteCatalogItem, restoreCatalogItem,
+  approvalConfigOf, saveApprovalConfig, recentStoreCents,
+  contractsOf, contractSummary, saveContract, computeDepartmentQuote,
   computeQuote, createStoreOrder, createDepartmentOrders, approveDepartmentGroup,
-  approveOrder, cancelOrder, closeOrder, supplierAck, reopenSupplierAck, supplierDeliver, batchAvailability, acceptDelivery,
-  acceptedAmountOf, settleActorOf, submitSettlement, settleAction, pendingSettleOrders,
-  createReconciliation, reconAction, slaEntries, slaForOrder, reportSummary, departmentSummary,
+  approveOrder, batchApproveOrders, cancelOrder, closeOrder, supplierAck, reopenSupplierAck, supplierDeliver,
+  batchAvailability, acceptDelivery, hasOpenAcceptanceIssue, resolveAcceptanceIssue, finalizeShortDelivery,
+  acceptedAmountOf, acceptedBySupplierOf, settlementBySupplierOf, settleActorOf, submitSettlement, settleAction, pendingSettleOrders,
+  createReconciliation, reconAction, slaEntries, slaForOrder, effectiveOrderAmounts, reportSummary, departmentSummary, contractBudgetReport,
   budgetSummary, budgetGap, adjustFlex, transferStoreBudget, storeUsableCents, frequentItems,
   saveBudgetConfig, budgetConfigOf, storeBudgetRows, splitOrder, applyGapBudget, revertBudgetTransfer,
   visibleOrders, pendingAcceptOrders, canAcceptOrder,
@@ -2025,13 +3294,13 @@ const STATUS_MAP = {
   'budget-central': { label: '待运营管理部核定预算', cls: 'warn' },
   'amount-approval': { label: '待金额审批', cls: 'warn' },
   'dept-approval': { label: '待运营管理部确认', cls: 'warn' },
-  'supplier': { label: '待供应商接单', cls: 'warn' },
-  'preparing': { label: '备货中', cls: 'warn' },
-  'delivering': { label: '配送中', cls: 'info' },
-  'delivered': { label: '已送达待验收', cls: 'info' },
-  'partial': { label: '部分验收', cls: 'info' },
-  'settle-pending': { label: '待门店确认结算', cls: 'warn' },
-  'settle-supplier': { label: '待供应商确认结算', cls: 'info' },
+  'supplier': { label: '待供应商接单', cls: 'info' },
+  'preparing': { label: '备货中', cls: 'info' },
+  'delivering': { label: '配送中', cls: 'teal' },
+  'delivered': { label: '已送达待验收', cls: 'teal' },
+  'partial': { label: '部分验收', cls: 'teal' },
+  'settle-pending': { label: '待门店确认结算', cls: 'violet' },
+  'settle-supplier': { label: '待供应商确认结算', cls: 'violet' },
   'settle-disputed': { label: '结算有差异待重提', cls: 'bad' },
   'accepted': { label: '结算已确认待对账', cls: 'dark' },
   'done': { label: '已完成', cls: 'good' },
@@ -2067,12 +3336,12 @@ const ROLE_LABEL = {
   department: '职能部门采购员'
 };
 
-// 所有门店单先经战区审核；金额分级决定审核之后是否再走金额审批
+// 所有门店单先经战区审核；金额分级决定审核之后是否再走中台金额审批（500-2000元战区一步终审）
 const TIER_LABEL = {
-  auto: '500元以内 · 战区审核后直发',
-  region: '500-2000元 · 战区审核（含金额）',
+  auto: '500元以内 · 战区一步审核直发',
+  region: '500-2000元 · 战区一步终审（含金额）',
   central: '2000元以上 · 战区审核 + 中台金额审批',
-  department: '部门采购 · 运管确认'
+  department: '部门采购 · 运管确认（合同总额上限）'
 };
 
 function statusLabel(status) {
@@ -2155,7 +3424,7 @@ __def("utils/perm", function (module, exports, require) {
 const CAPS = {
   store: ['order.create', 'order.view', 'accept', 'draft', 'stats', 'settle.submit'],
   department: ['order.create', 'order.view', 'accept', 'draft', 'stats', 'settle.submit'],
-  central: ['order.create', 'order.view', 'accept', 'draft', 'stats', 'approve', 'recon', 'budget.config'],
+  central: ['order.create', 'order.view', 'accept', 'draft', 'stats', 'approve', 'recon', 'budget.config', 'catalog.manage'],
   region: ['order.view', 'approve', 'stats'],
   supplier: ['supply', 'order.view', 'stats', 'recon.confirm', 'settle.confirm']
 };
@@ -2176,8 +3445,8 @@ const ROLE_META = {
   central: {
     label: '运营管理部',
     tone: 'navy',
-    duty: '预算核定、部门确认与统一对账',
-    brief: ['中台自采下单', '预算核定与金额审批', '部门采购统一确认', '统一对账与锁定', '门店费用预算设置']
+    duty: '预算核定、物资维护、部门确认与统一对账',
+    brief: ['中台操作台（物资增删改/合同上限/审批规则）', '中台自采下单', '预算核定与金额审批', '部门采购统一确认', '统一对账与锁定', '门店费用预算设置']
   },
   region: {
     label: '战区负责人',
@@ -2233,7 +3502,7 @@ const TABS = {
 const HOME_ENTRIES = {
   store: ['order', 'orders', 'accept', 'drafts'],
   department: ['order', 'orders', 'accept', 'drafts'],
-  central: ['order', 'approve', 'orders', 'budget'],
+  central: ['console', 'approve', 'budget', 'order'],
   region: ['approve', 'orders', 'reports'],
   supplier: ['supply', 'orders', 'recon']
 };
@@ -2246,6 +3515,7 @@ const ENTRY_META = {
   approve: { label: '待办审批', icon: '✅', url: '/pages/approvals/approvals', tone: 'amber' },
   recon: { label: '统一对账', icon: '🧾', url: '/pages/reports/reports?tab=recon', tone: 'violet' },
   budget: { label: '预算设置', icon: '💰', url: '/pages/budget/budget', tone: 'teal' },
+  console: { label: '中台操作台', icon: '🛠️', url: '/pages/budget/budget', tone: 'navy' },
   reports: { label: '统计看板', icon: '📊', url: '/pages/reports/reports', tone: 'blue' },
   supply: { label: '供应商工作台', icon: '🚚', url: '/pages/supplier/supplier', tone: 'amber' }
 };
@@ -2314,6 +3584,7 @@ module.exports = {
     load: load,
     budget: load('data/budget'),
     catalog: load('data/catalog'),
+    rules: load('data/rules'),
     seed: load('data/seed'),
     subcats: load('data/subcats'),
     domain: load('utils/domain'),

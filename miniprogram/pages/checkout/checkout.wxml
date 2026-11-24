@@ -85,6 +85,10 @@
       <view class="notice {{quote.overBudget ? 'warn' : ''}}" style="margin:18rpx 0 0">
         审批路径：{{quote.pathText}}
       </view>
+      <view class="kv" wx:if="{{multiContract}}" style="margin-top:14rpx">
+        <text class="muted">按合同拆为独立订单（推荐）</text>
+        <switch checked="{{splitByContract}}" color="#1c7ed6" bindchange="toggleSplitContract" />
+      </view>
     </view>
   </block>
 

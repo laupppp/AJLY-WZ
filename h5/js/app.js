@@ -15,6 +15,7 @@
     recon: { label: '统一对账', icon: 'bill', hash: '/reports?tab=recon' },
     drafts: { label: '草稿箱', icon: 'box', hash: '/drafts' },
     budget: { label: '预算设置', icon: 'bill', hash: '/budget' },
+    console: { label: '中台操作台', icon: 'shop', hash: '/console' },
     guide: { label: '采购说明', icon: 'box', hash: '/guide' },
     settle: { label: '结算确认', icon: 'bill', hash: '/settle' },
     me: { label: '我的', icon: 'user', hash: '/profile' }
@@ -25,7 +26,7 @@
     orders: 'orders', order: 'orders', settle: 'orders',
     approvals: 'approve', supplier: 'supplier',
     accept: 'accept', drafts: 'drafts',
-    reports: 'reports', profile: 'me', guide: 'me', login: '', budget: 'reports'
+    reports: 'reports', profile: 'me', guide: 'me', login: '', budget: 'budget', console: 'console'
   };
 
   const state = { me: null, route: null };
@@ -36,6 +37,7 @@
     if (r.name === 'accept') return r.params[0] ? '批次验收' : '收货验收';
     if (r.name === 'reports' && r.query.tab === 'recon') return '统一对账';
     if (r.name === 'budget') return '门店费用预算';
+    if (r.name === 'console') return '中台操作台';
     if (r.name === 'guide') return '采购流程说明';
     if (r.name === 'settle') return '结算金额确认';
     const key = TAB_OF[r.name];
@@ -85,7 +87,7 @@
     if (me.role === 'store' || me.role === 'department') {
       if (tabKeys.indexOf('accept') < 0) extra.push('accept');
     }
-    if (me.role === 'central') { extra.push('recon'); extra.push('budget'); }
+    if (me.role === 'central') { extra.push('console'); extra.push('recon'); extra.push('budget'); }
     const sideKeys = tabKeys.concat(extra);
 
     document.getElementById('side-nav').innerHTML = sideKeys.map(function (key) {
@@ -114,6 +116,79 @@
     } else {
       sideUser.innerHTML = '<span class="av">?</span><span class="col"><span class="nm">未登录</span></span>';
     }
+
+    renderTopIdentityPill(me);
+  }
+
+  function idPillLabel(me) {
+    if (!me) return '未登录';
+    if (me.role === 'store') {
+      const stName = (me.stores && me.stores[0]) ? me.stores[0] : '';
+      return stName ? (stName + ' · ' + me.name.replace('测试', '')) : me.name;
+    }
+    if (me.role === 'region') return (me.zone || '战区') + ' · 负责人';
+    if (me.role === 'central') return '运营管理部 · 中台';
+    if (me.role === 'department') return me.department || me.name;
+    if (me.role === 'supplier') return String(me.supplier || '').replace(/[（(].*[)）]/g, '');
+    return me.name;
+  }
+
+  function openQuickIdentitySheet() {
+    if (Session.isExternal()) { go('/profile'); return; }
+    const groups = Session.grouped();
+    const cur = Session.current();
+    const body = '<div class="tiny muted mb8">切换当前测试账号，立即在当前页面以对应权限视角查看（正式企业微信环境按通讯录免登）。</div>' +
+      groups.map(function (g) {
+        if (!g.items.length) return '';
+        return '<div class="login-group" style="margin-top:10px">' +
+          '<h3>' + UI.esc(g.title) + '<span>' + UI.esc(g.note) + '</span></h3>' +
+          g.items.map(function (p) {
+            const on = cur && cur.id === p.id;
+            return '<button class="id-card" type="button" data-quick-id="' + UI.esc(p.id) + '" style="' + (on ? 'border-color:var(--brand-2);background:#f3f8fe' : '') + '">' +
+              '<span class="av">' + UI.esc(Session.avatarOf(p)) + '</span>' +
+              '<span class="col grow"><span class="nm">' + UI.esc(p.name) + (on ? ' <span class="pill good">当前</span>' : '') + '</span>' +
+              '<span class="ds">' + UI.esc(p.desc || p.zone || '') + '</span></span>' +
+              UI.icon('right') + '</button>';
+          }).join('') +
+        '</div>';
+      }).join('');
+    UI.sheet({
+      title: '切换体验身份',
+      sub: '门店店长 · 战区负责人 · 运营管理部 · 职能部门 · 供应商',
+      body: body,
+      mount: function (bodyEl, close) {
+        bodyEl.addEventListener('click', function (e) {
+          const btn = e.target.closest('[data-quick-id]');
+          if (!btn) return;
+          try {
+            const p = Session.switchTo(btn.dataset.quickId);
+            close();
+            UI.toast('已切换为 ' + p.name, 'good', 1400);
+            render();
+          } catch (err) { UI.toast(err.message, 'error'); }
+        });
+      }
+    });
+  }
+
+  function renderTopIdentityPill(me) {
+    const host = document.getElementById('topbar-act');
+    if (!host) return;
+    const old = host.querySelector('#top-id-pill');
+    if (old) old.remove();
+    if (!me) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'top-id-pill';
+    btn.className = 'id-pill role-' + (me.role || 'store');
+    btn.title = Session.isExternal() ? '查看当前账号详情' : '点击快速切换测试角色';
+    btn.innerHTML = '<span class="dot"></span><span class="txt">' + UI.esc(idPillLabel(me)) + '</span>' +
+      (!Session.isExternal() ? UI.icon('switch', 'xs') : '');
+    btn.onclick = function () {
+      if (Session.isExternal()) go('/profile');
+      else openQuickIdentitySheet();
+    };
+    host.appendChild(btn);
   }
 
   function markNav(name) {
@@ -223,6 +298,8 @@
 
   /* ---------------- 启动 ---------------- */
   function boot() {
+    const logoEl = document.getElementById('side-logo-img');
+    if (logoEl && global.UI) logoEl.src = UI.logoSrc();
     Session.bootstrap().then(function () {
       // 演示便利：?as=TEST-CENTRAL 可直接以指定身份进入（正式环境不会用到）
       const as = new URLSearchParams(location.search).get('as');

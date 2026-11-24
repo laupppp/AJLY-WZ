@@ -12,7 +12,7 @@
     root.innerHTML =
       '<div class="login">' +
         '<div class="login-hero">' +
-          '<div class="login-logo">安</div>' +
+          UI.brandLogo('login-logo') +
           '<h1>' + UI.esc(APP_CONFIG.brand) + '</h1>' +
           '<p>门店采购 · 分级审批 · 供应商履约 · 验收对账</p>' +
         '</div>' +

@@ -27,3 +27,6 @@ jobs:
 
       - name: JS 语法检查
         run: node h5/check-syntax.js
+
+      - name: 业务逻辑单元测试
+        run: node --test tests/domain.test.js

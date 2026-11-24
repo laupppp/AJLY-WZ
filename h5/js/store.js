@@ -108,7 +108,7 @@
   /* ------------- 审批/操作流水 ------------- */
   function appendAudit(rows) {
     if (!rows || !rows.length) return;
-    const list = (read(K.audit, []) || []).concat(rows).slice(0, 600);
+    const list = rows.concat(read(K.audit, []) || []).slice(0, 600);
     write(K.audit, list);
   }
 
@@ -121,7 +121,7 @@
   function addEvidence(row) {
     const list = read(K.evidence, []) || [];
     list.unshift(row);
-    write(K.evidence, list.slice(0, 12));
+    write(K.evidence, list.slice(0, 36));
   }
 
   function listEvidence(orderId) {

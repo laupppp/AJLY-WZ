@@ -27,6 +27,8 @@ Page({
     purpose: '门店日常运营',
     due: '',
     note: '',
+    multiContract: false,
+    splitByContract: true,
     // 部门表单
     deptName: '',
     destDraftType: 'office',
@@ -52,17 +54,23 @@ Page({
       return;
     }
 
+    const catMap = domain.catalogMapOf(store.loadState());
     const items = input.items.map(function (line) {
-      const p = PRODUCT_MAP[line.id];
+      const p = catMap[line.id] || PRODUCT_MAP[line.id];
       return {
         id: line.id,
         name: p ? p.name : line.id,
         spec: p ? p.spec : '',
         unit: p ? p.unit : '个',
         price: p ? p.price : 0,
+        supplier: p ? (p.supplier || '') : '',
         qty: line.qty
       };
     });
+
+    const supMap = {};
+    items.forEach(function (x) { if (x.supplier) supMap[x.supplier] = 1; });
+    const multiContract = Object.keys(supMap).length > 1;
 
     const amountCents = items.reduce(function (sum, x) { return sum + Math.round(x.price * 100) * x.qty; }, 0);
 
@@ -95,7 +103,8 @@ Page({
         receiver: (me && me.name) || '门店收货人',
         due: due,
         totalText: fmt.money2(amountCents / 100),
-        dests: []
+        dests: [],
+        multiContract: multiContract
       });
       this.simulate();
     }
@@ -136,6 +145,10 @@ Page({
 
   onDue(e) {
     this.setData({ due: e.detail.value });
+  },
+
+  toggleSplitContract(e) {
+    this.setData({ splitByContract: !!e.detail.value });
   },
 
   /* ---------- 部门配送地点 ---------- */
@@ -273,6 +286,7 @@ Page({
       const result = domain.createStoreOrder(state, me, {
         store: this.data.storeName,
         items: this.data.items.map(function (x) { return { id: x.id, qty: x.qty }; }),
+        splitByContract: this.data.splitByContract,
         details: {
           address: this.data.address,
           receiver: this.data.receiver,
@@ -284,13 +298,18 @@ Page({
       store.saveState(state);
       store.clearCart();
       wx.removeStorageSync('anju_checkout_input');
-      const order = result.order;
-      const nextText = order.status === 'supplier' ? '已直接发送供应商待接单'
-        : order.status === 'budget-region' ? '超出预算，进入战区预算审批'
-          : '进入' + fmt.statusLabel(order.status);
+      const created = (result.orders && result.orders.length) ? result.orders : [result.order];
+      const order = created[0];
+      const nextText = created.length > 1
+        ? '已按框架合同自动拆分为 ' + created.length + ' 笔独立订单（' + created.map(function (o) { return o.id; }).join('、') + '）'
+        : (order.status === 'supplier' ? '已直接发送供应商待接单'
+          : order.status === 'budget-region' ? '超出预算，进入战区预算审批'
+            : '进入' + fmt.statusLabel(order.status));
       wx.showModal({
         title: '提交成功',
-        content: '订单 ' + order.id + '，合计 ¥' + fmt.money(order.total) + '。\n' + nextText + '。',
+        content: created.length > 1
+          ? nextText + '。'
+          : ('订单 ' + order.id + '，合计 ¥' + fmt.money(order.total) + '。\n' + nextText + '。'),
         showCancel: false,
         success: function () {
           wx.reLaunch({ url: '/pages/orders/orders' });

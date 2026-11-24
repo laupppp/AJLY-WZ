@@ -15,6 +15,56 @@
     return '<svg class="ic ' + (cls || '') + '"><use href="#i-' + name + '"/></svg>';
   }
 
+  function logoSrc() {
+    return (global.APP_CONFIG && global.APP_CONFIG.logo) || 'img/logo.png';
+  }
+
+  function brandLogo(cls, alt) {
+    return '<div class="' + esc(cls || 'brand-badge') + ' has-img">' +
+      '<img src="' + esc(logoSrc()) + '" alt="' + esc(alt || '安居乐寓') + '">' +
+    '</div>';
+  }
+
+  function budgetKeyOf(val) {
+    if (!val) return 'customer';
+    if (typeof val === 'object') return global.BIZ.budget.itemOf(val);
+    const s = String(val);
+    if (s === 'community' || s === '社群活动物资' || s === '社群活动预算') return 'community';
+    if (s === 'marketing' || s === '印刷品物料' || s === '营销预算') return 'marketing';
+    return 'customer';
+  }
+
+  function catIcon(val, cls) {
+    const k = budgetKeyOf(val);
+    const map = { community: 'cat-community', customer: 'cat-customer', marketing: 'cat-marketing' };
+    return icon(map[k] || 'box', cls);
+  }
+
+  function budgetPill(val, label) {
+    const k = budgetKeyOf(val);
+    const name = label || global.BIZ.budget.itemName(k);
+    return '<span class="pill tone-' + k + '">' + esc(name) + '</span>';
+  }
+
+  function exportCSV(filename, headers, rows) {
+    const cell = function (v) {
+      const s = String(v === null || v === undefined ? '' : v).replace(/\r?\n/g, ' ');
+      return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [headers.map(cell).join(',')].concat((rows || []).map(function (r) {
+      return r.map(cell).join(',');
+    }));
+    const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 600);
+    toast('已导出：' + filename, 'good', 1800);
+  }
+
   function toast(message, type, ms) {
     const host = document.getElementById('toast-host');
     if (!host) return;
@@ -109,7 +159,7 @@
   const SUPPLIER_STATUS = {
     pending: { label: '待接单', cls: 'warn' },
     confirmed: { label: '备货中', cls: 'info' },
-    shipping: { label: '配送中', cls: 'info' },
+    shipping: { label: '配送中', cls: 'teal' },
     // 验收完成只代表「货已收」，结算金额仍需双方共同确认，不能标成已完成
     accepted: { label: '已验收', cls: 'good' },
     issue: { label: '无法接单', cls: 'bad' }
@@ -124,8 +174,17 @@
     return (SUPPLIER_STATUS[status] || { label: status || '未知' }).label;
   }
 
+  const EMPTY_ICON_MAP = {
+    '📊': 'chart', '🧾': 'bill', '🏢': 'shop', '🚚': 'truck', '📦': 'box',
+    '🛒': 'cart', '🔍': 'search', '🔐': 'user', '🔒': 'user', '✅': 'check', '📭': 'orders'
+  };
+
   function empty(ico, title, sub) {
-    return '<div class="empty"><div class="ico">' + (ico || '📭') + '</div>' +
+    const mapped = EMPTY_ICON_MAP[ico] || (ico && ico.charAt(0) === '#' ? ico.slice(1) : '');
+    const icoHtml = mapped
+      ? '<div class="ico svg">' + icon(mapped) + '</div>'
+      : '<div class="ico">' + (ico || icon('orders')) + '</div>';
+    return '<div class="empty">' + icoHtml +
       '<div class="t">' + esc(title) + '</div>' +
       (sub ? '<div class="s">' + esc(sub) + '</div>' : '') + '</div>';
   }
@@ -230,6 +289,8 @@
 
   global.UI = {
     esc: esc, money: money, money2: money2, icon: icon,
+    logoSrc: logoSrc, brandLogo: brandLogo,
+    budgetKeyOf: budgetKeyOf, catIcon: catIcon, budgetPill: budgetPill, exportCSV: exportCSV,
     toast: toast, sheet: sheet, confirm: confirm,
     statusPill: statusPill, supplierPill: supplierPill, supplierStatusText: supplierStatusText,
     empty: empty, timeText: timeText, dateTimeText: dateTimeText, shortTime: shortTime, fromNow: fromNow,

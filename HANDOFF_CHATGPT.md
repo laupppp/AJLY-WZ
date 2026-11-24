@@ -63,7 +63,7 @@ h5/
     ├── session.js        身份：演示身份切换 + 企业微信免登适配
     ├── ui.js             toast / sheet / confirm / 状态胶囊 / 图标 / 金额 / 图片压缩
     ├── app.js            路由（#/route/param?query）、渲染、导航徽标、App.mutate
-    └── pages/            15 个页面，每个文件注册一个 Views.xxx(root, r, ctx)
+    └── pages/            16 个页面，每个文件注册一个 Views.xxx(root, r, ctx)
 ```
 
 页面文件一览（`Views.<name>`）：
@@ -73,18 +73,19 @@ h5/
 | `login.js` | `#/login` | 演示身份选择 |
 | `home.js` | `#/home` | 首页：统计卡、待办、预算占用、快捷入口 |
 | `catalog.js` | `#/catalog` | 下单：左侧分类（点两次收起）、搜索、常买清单 |
-| `checkout.js` | `#/checkout` | 确认订单、预算试算、提交 |
+| `checkout.js` | `#/checkout` | 确认订单、预算试算、合同校验、提交 |
 | `orders.js` | `#/orders` | 订单列表 + 横向筛选（全部/待处理/配送中/结算中/待对账/已完成/已关闭） |
-| `order-detail.js` | `#/order/:id` | 详情：进度、明细、验收记录、结算卡、流转记录、操作条 |
-| `approvals.js` | `#/approvals` | 审批台（战区审核 / 预算核定 / 金额分级） |
+| `order-detail.js` | `#/order/:id` | 详情：进度、明细、验收记录、短收结案、结算卡、流转记录、操作条 |
+| `approvals.js` | `#/approvals` | 审批台（战区审核 / 一步终审 / 预算核定 / 数量微调 / 批量通过） |
 | `supplier.js` | `#/supplier` | 供应商工作台：待接单/异常/待发货/配送中/结算确认/已完成 |
 | `accept.js` | `#/accept`、`#/accept/:id` | 收货验收（逐品合格数量、拍照留证） |
 | `reports.js` | `#/reports?tab=budget\|zone\|dept\|supplier\|recon` | 统计看板 + 统一对账 |
-| `profile.js` | `#/profile` | 我的：身份、采购说明入口、企业微信、演示工具 |
+| `profile.js` | `#/profile` | 我的：身份、中台操作台/采购说明入口、企业微信、演示工具 |
 | `drafts.js` | `#/drafts` | 草稿箱 |
 | `budget.js` | `#/budget` | 门店 × 费用科目的预算设置（中台） |
+| `console.js` | `#/console?tab=catalog\|contracts\|rules` | 中台操作台：物资增删改/上下架、合同总额上限、审批规则配置 |
 | `guide.js` | `#/guide` | 采购流程说明（静态内容） |
-| `settle.js` | `#/settle/:id` | 结算金额共同确认（门店填报 / 供应商确认或异议） |
+| `settle.js` | `#/settle/:id` | 结算金额共同确认（门店填报 / 多供应商分别确认或异议） |
 
 ---
 
@@ -113,17 +114,18 @@ h5/
 ### 订单状态机
 
 ```
-下单 ──> order-review（待战区审核，门店单必经）
-          ├─ 未超预算 & 金额档位低 ──> supplier（待供应商接单）
-          ├─ 超预算 ────────────────> budget-central（运营管理部核定）
-          └─ 金额需审批 ────────────> amount-approval（按档位：战区 / 中台）
+下单 ──> order-review（待战区审核；开启小额免审时 ≤autoMax 预算内可直发 supplier）
+          ├─ 未超预算 & ≤500 ─────> supplier（待供应商接单）
+          ├─ 未超预算 & 500–2000 ─> supplier（战区一步终审合并金额审批）
+          ├─ 未超预算 & >2000 ────> amount-approval（中台金额审批）
+          └─ 超预算（在可核定上限内）──> budget-central（中台一步核定预算兼金额审批）──> supplier
 supplier ──> preparing ──> delivering ──> （验收）
 验收完成后：
   全部验收完 ──> settle-pending（待门店确认结算）
-  部分验收 ────> partial（继续等下一批）
-settle-pending ──填报金额──> settle-supplier（待供应商确认结算）
-settle-supplier ──供应商确认──> accepted（= 结算已确认，待对账）
-settle-supplier ──供应商异议──> settle-disputed（门店重新填报，回到 settle-pending 的流程）
+  部分验收 ────> partial（可等下一批，或通过 finalizeShortDelivery 短收结案至 settle-pending）
+settle-pending ──填报金额──> settle-supplier（待涉及的全部供应商确认结算）
+settle-supplier ──全员确认──> accepted（= 结算已确认，待对账，预算按结算额调整）
+settle-supplier ──任一异议──> settle-disputed（门店重新填报）
 accepted ──对账生成并锁定──> done
 ```
 
@@ -179,10 +181,13 @@ accepted ──对账生成并锁定──> done
 ## 8. 改完怎么验证
 
 ```bash
+npm test                          # 一键运行 biz.js 检查 + standalone 检查 + 语法检查 + 单元测试
 npm run h5:check                  # 1. biz.js 没过期（改了 miniprogram 就必须过这关）
 npm run h5:standalone             # 2. 单文件版能生成（顺带验证没有语法错误）
 npm run h5:serve                  # 3. 起服务，人工点一遍
 ```
+
+更多中台操作台、合同上限与审批优化口径见 [`docs/OPTIMIZATION_GUIDE.md`](docs/OPTIMIZATION_GUIDE.md)。
 
 人工回归清单（每条都能在浏览器里手动走）：
 

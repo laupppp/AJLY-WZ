@@ -1,38 +1,37 @@
-/* 采购下单：左侧竖排两级目录 + 右侧商品列表 + 购物车 */
+/* 采购下单：左侧竖排两级目录 + 右侧商品列表 + 购物车（实时读取中台操作台维护的物资清单） */
 (function (Views) {
   const TOP_SHORT = {
-    '奖品礼品': '奖品礼品',
-    '活动及社群物资': '活动社群',
-    '日常运营耗材': '日常耗材',
-    '宣传印刷物料': '宣传印刷',
-    '员工物资': '员工物资'
+    '社群活动物资': '社群活动',
+    '客诉维护物资': '客诉物资',
+    '印刷品物料': '印刷物料'
   };
 
-  const PRODUCTS = BIZ.catalog.CATALOG.map(function (p) {
-    return {
-      id: p.id,
-      name: p.name,
-      spec: p.spec,
-      unit: p.unit,
-      price: p.price,
-      supplier: p.supplier,
-      category: p.category,
-      icon: (BIZ.catalog.CATEGORY_META[p.category] || { icon: '📦' }).icon,
-      key: (p.name + ' ' + p.spec + ' ' + p.supplier + ' ' + p.id).toLowerCase()
-    };
-  });
-
-  const PMAP = {};
-  PRODUCTS.forEach(function (p) { PMAP[p.id] = p; });
-
-  const INDEX = BIZ.subcats.build(BIZ.catalog.CATALOG);
-
-  const NAV = (function () {
+  function buildCatalogIndex(state, me) {
+    const rawList = BIZ.domain.catalogOf(state, { activeOnly: true, buyer: me });
+    const PRODUCTS = rawList.map(function (p) {
+      return {
+        id: p.id,
+        name: p.name,
+        spec: p.spec,
+        unit: p.unit,
+        price: p.price,
+        supplier: p.supplier,
+        category: p.category,
+        budgetItem: p.budgetItem || '',
+        purchaseScope: p.purchaseScope || 'all',
+        isCustom: !!p.isCustom,
+        icon: (BIZ.catalog.CATEGORY_META[p.category] || { icon: '📦' }).icon,
+        key: (p.name + ' ' + (p.spec || '') + ' ' + (p.supplier || '') + ' ' + p.id).toLowerCase()
+      };
+    });
+    const PMAP = {};
+    PRODUCTS.forEach(function (p) { PMAP[p.id] = p; });
+    const INDEX = BIZ.subcats.build(rawList);
     const byId = {};
     INDEX.nav.forEach(function (c) {
       c.subs.forEach(function (s) { byId[s.key] = s; });
     });
-    return {
+    const NAV = {
       list: [{
         key: 'all', label: '全部物资', short: '全部', count: PRODUCTS.length, subs: []
       }].concat(INDEX.nav.map(function (c) {
@@ -48,17 +47,16 @@
       })),
       subs: byId
     };
-  })();
-
-  // 二级分类 → 商品 id 集合（一次性算好，避免每次筛选都重新归类）
-  const SUB_IDS = {};
-  INDEX.nav.forEach(function (c) {
-    c.subs.forEach(function (s) {
-      const map = {};
-      s.ids.forEach(function (id) { map[id] = 1; });
-      SUB_IDS[s.key] = map;
+    const SUB_IDS = {};
+    INDEX.nav.forEach(function (c) {
+      c.subs.forEach(function (s) {
+        const map = {};
+        s.ids.forEach(function (id) { map[id] = 1; });
+        SUB_IDS[s.key] = map;
+      });
     });
-  });
+    return { PRODUCTS: PRODUCTS, PMAP: PMAP, NAV: NAV, SUB_IDS: SUB_IDS };
+  }
 
   Views.catalog = function (root, r, ctx) {
     const domain = BIZ.domain;
@@ -67,10 +65,19 @@
     const state = ctx.state;
     const canBuy = perm.can(me, 'order.create');
     const isDept = perm.isDepartmentFlow(me);
+    const catIdx = buildCatalogIndex(state, me);
+    const PRODUCTS = catIdx.PRODUCTS;
+    const PMAP = catIdx.PMAP;
+    const NAV = catIdx.NAV;
+    const SUB_IDS = catIdx.SUB_IDS;
 
     if (!canBuy) {
       root.innerHTML = UI.empty('🔒', '当前身份无下单权限', '战区负责人与供应商不在采购下单范围内');
       return;
+    }
+
+    if (me.role === 'central') {
+      App.topAction('<a class="btn ghost sm" href="#/console">物资管理</a>');
     }
 
     let cart = Store.loadCart(me.id);
@@ -146,6 +153,7 @@
             '</div>' +
             '<div class="ctx-sum"><b id="ctx-amt">¥0</b><span id="ctx-qty">未选商品</span></div>' +
           '</div>' +
+          '<div class="cat-budget" id="cat-budget"></div>' +
           '<div class="search" id="search"><svg class="ic"><use href="#i-search"/></svg>' +
             '<input id="q" type="search" placeholder="搜索商品名称 / 规格 / 供应商" autocomplete="off">' +
             '<button class="clear" id="q-clear"><svg class="ic sm"><use href="#i-close"/></svg></button>' +
@@ -156,7 +164,6 @@
         '<div class="cat-body">' +
           '<aside class="rail" id="rail"></aside>' +
           '<section class="goods">' +
-            '<div id="freq"></div>' +
             '<div class="plist" id="plist"></div>' +
             '<div id="more"></div>' +
           '</section>' +
@@ -195,7 +202,8 @@
         // 再点同一大类收起二级目录（列表仍停在该大类）：view.open 必须真正参与渲染
         const open = view.cat === c.key && view.open;
         const on = view.cat === c.key && !view.sub;
-        return '<div class="rail-cat' + (on ? ' on' : '') + (open ? ' open' : '') + '" data-cat="' + UI.esc(c.key) + '"' +
+        const tone = UI.budgetKeyOf(c.label);
+        return '<div class="rail-cat tone-' + tone + (on ? ' on' : '') + (open ? ' open' : '') + '" data-cat="' + UI.esc(c.key) + '"' +
           (c.subs.length ? ' title="再点一次可收起二级目录"' : '') + '>' +
           '<span>' + UI.esc(c.short) + '</span>' +
           (c.subs.length ? UI.icon('right') : '<span class="n">' + c.count + '</span>') +
@@ -205,21 +213,6 @@
             '<span>' + UI.esc(s.short) + '</span><span class="n">' + s.count + '</span></div>';
         }).join('') + '<div class="rail-fold" data-fold="' + UI.esc(c.key) + '">收起 ⌃</div>' : '');
       }).join('') + '<div class="rail-pad"></div>';
-    }
-
-    function renderFreq() {
-      const host = root.querySelector('#freq');
-      if (view.keyword || view.sub || view.cat !== 'all') { host.innerHTML = ''; return; }
-      const list = domain.frequentItems(state, me, 6);
-      if (!list.length) { host.innerHTML = ''; return; }
-      host.innerHTML = '<div class="freq">' +
-        '<div class="freq-head"><span class="t">常买清单</span><span class="s">按历史下单排序，点一下加 1 件</span></div>' +
-        '<div class="freq-list">' + list.map(function (p) {
-          const qty = cart.lines[p.id] || 0;
-          return '<button class="freq-chip" data-plus="' + UI.esc(p.id) + '">' +
-            '<b>' + UI.esc(p.name) + '</b>' +
-            '<span>¥' + UI.money2(p.price) + (qty ? ' · 已选 ' + qty : ' · ＋加入') + '</span></button>';
-        }).join('') + '</div></div>';
     }
 
     function renderList() {
@@ -236,11 +229,16 @@
         const parent = NAV.list.filter(function (c) {
           return c.subs.some(function (x) { return x.key === s.key; });
         })[0];
+        const meta = parent && BIZ.catalog.CATEGORY_META[parent.key];
         title = s.label;
-        sub = parent ? parent.label : '';
+        sub = meta ? (meta.contract + ' · ' + meta.budgetName) : (parent ? parent.label : '');
       } else if (view.cat !== 'all') {
         const c = NAV.list.filter(function (x) { return x.key === view.cat; })[0];
+        const meta = BIZ.catalog.CATEGORY_META[view.cat];
         title = c ? c.label : '全部物资';
+        sub = meta ? (meta.contract + ' · ' + meta.budgetName) : '';
+      } else {
+        sub = '按合同 × 预算项分为 3 类';
       }
 
       root.querySelector('#cat-title').firstChild.nodeValue = title + ' ';
@@ -253,14 +251,19 @@
       } else {
         host.innerHTML = slice.map(function (p) {
           const qty = cart.lines[p.id] || 0;
+          const bKey = UI.budgetKeyOf(p);
+          const scopeBadge = (me.role === 'central' && p.purchaseScope === 'central')
+            ? '<span class="pill violet" style="margin-left:auto">仅中台采</span>'
+            : '';
           return '<div class="prod" data-id="' + UI.esc(p.id) + '">' +
-            '<div class="prod-ico">' + p.icon + '</div>' +
+            '<div class="prod-ico tone-' + bKey + '">' + UI.catIcon(bKey) + '</div>' +
             '<div class="prod-main">' +
               '<div class="prod-name">' + UI.esc(p.name) + '</div>' +
               '<div class="prod-spec">' + UI.esc(p.spec || '') +
                 (p.supplier ? '<span class="prod-sup"> · ' + UI.esc(p.supplier) + '</span>' : '') + '</div>' +
               '<div class="prod-foot"><span class="prod-price">¥' + UI.money2(p.price) + '</span>' +
-                '<span class="prod-unit">/ ' + UI.esc(p.unit || '件') + '</span></div>' +
+                '<span class="prod-unit">/ ' + UI.esc(p.unit || '件') + '</span>' +
+                scopeBadge + '</div>' +
             '</div>' +
             '<div class="prod-act">' +
               (qty
@@ -285,6 +288,64 @@
       }
     }
 
+    function renderBudgetBar() {
+      const host = root.querySelector('#cat-budget');
+      if (!host) return;
+      const ls = lines();
+
+      if (isDept) {
+        const dq = ls.length
+          ? domain.computeDepartmentQuote(state, ls.map(function (x) { return { id: x.id, qty: x.qty }; }))
+          : null;
+        const rows = (dq && dq.contractRows && dq.contractRows.length)
+          ? dq.contractRows
+          : domain.contractSummary(state).map(function (c) {
+              return { supplier: c.supplier, total: c.total, used: c.used, remaining: c.remaining, apply: 0, over: 0, overCap: false };
+            });
+        if (!rows.length) { host.innerHTML = ''; return; }
+        host.innerHTML = '<div class="cb-grid" style="grid-template-columns:repeat(' + Math.min(3, rows.length) + ',minmax(0,1fr))">' +
+          rows.slice(0, 3).map(function (r) {
+            const total = Number(r.total || 0);
+            const usedAll = Number(r.used || 0) + Number(r.apply || 0);
+            const pct = total > 0 ? Math.min(100, Math.round(usedAll / total * 100)) : 0;
+            const tone = r.overCap ? 'bad' : (pct >= 75 ? 'warn' : '');
+            const remain = Math.round((Number(r.remaining || 0) - Number(r.apply || 0)) * 100) / 100;
+            const shortName = String(r.supplier || '').replace(/[（(].*[)）]/g, '');
+            const cTone = String(r.supplier || '').indexOf('印刷') >= 0 ? 'marketing' : 'community';
+            return '<div class="cb-item tone-' + cTone + (r.overCap ? ' bad' : '') + '">' +
+              '<div class="cb-top"><span>' + UI.esc(shortName) + '</span>' +
+                (r.apply > 0 ? '<b class="num">+¥' + UI.money(r.apply) + '</b>' : '<span class="muted">合同</span>') + '</div>' +
+              '<div class="bar" style="height:4px;margin-top:4px"><i class="' + (tone || ('tone-' + cTone)) + '" style="width:' + pct + '%"></i></div>' +
+              '<div class="cb-sub">' + (r.overCap ? ('超 ¥' + UI.money(r.over)) : ('余 ¥' + UI.money(Math.max(0, remain)))) + '</div>' +
+            '</div>';
+          }).join('') + '</div>';
+        return;
+      }
+
+      if (!storeName) { host.innerHTML = ''; return; }
+      const rows = domain.storeBudgetRows(state, storeName);
+      const cartByKey = {};
+      ls.forEach(function (x) {
+        const k = BIZ.budget.itemOf(x.product);
+        cartByKey[k] = Math.round(((cartByKey[k] || 0) + x.qty * x.product.price) * 100) / 100;
+      });
+      host.innerHTML = '<div class="cb-grid">' + rows.map(function (row) {
+        const add = cartByKey[row.key] || 0;
+        const afterUsed = row.used + add;
+        const pct = row.budget > 0 ? Math.min(100, Math.round(afterUsed / row.budget * 100)) : 0;
+        const over = Math.round((add - row.available) * 100) / 100;
+        const isOver = over > 0;
+        const tone = isOver ? 'bad' : (pct >= 75 ? 'warn' : '');
+        const left = Math.round((row.available - add) * 100) / 100;
+        return '<div class="cb-item tone-' + row.key + (isOver ? ' bad' : '') + '">' +
+          '<div class="cb-top"><span>' + UI.esc(row.short || row.name) + '</span>' +
+            (add > 0 ? '<b class="num">+¥' + UI.money(add) + '</b>' : '<span class="muted">可用</span>') + '</div>' +
+          '<div class="bar" style="height:4px;margin-top:4px"><i class="' + (tone || ('tone-' + row.key)) + '" style="width:' + pct + '%"></i></div>' +
+          '<div class="cb-sub">' + (isOver ? ('超 ¥' + UI.money(over)) : ('余 ¥' + UI.money(Math.max(0, left)))) + '</div>' +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
     function renderCart() {
       const t = totals();
       const bar = root.querySelector('#cartbar');
@@ -293,6 +354,7 @@
       root.querySelector('#ctx-qty').textContent = t.qty ? t.qty + ' 件 · ' + t.count + ' 种' : '未选商品';
       root.querySelector('#cart-v').textContent = '¥' + UI.money2(t.amount);
       root.querySelector('#cart-k').textContent = t.count + ' 种 / ' + t.qty + ' 件';
+      renderBudgetBar();
       // 同步列表中的数量显示
       const rows = root.querySelectorAll('.prod[data-id]');
       rows.forEach(function (row) {
@@ -321,7 +383,6 @@
       else if (next > 9999) { UI.toast('单个商品最多 9999 件', 'error'); return; }
       else cart.lines[id] = next;
       persist();
-      if (next === 0 || next === 1) renderFreq();
       const counter = root.querySelector('#cat-count');
       if (counter) { /* 数量变化不影响条目数 */ }
     }
@@ -349,7 +410,7 @@
         actions: [
           { label: '清空清单', cls: 'danger', onClick: function () {
               cart.lines = {};
-              persist(); renderFreq();
+              persist();
               return true;
             } },
           { label: '去结算', cls: 'primary', onClick: function () { App.go('/checkout'); } }
@@ -385,7 +446,7 @@
         view.shown = 40;
         const q = root.querySelector('#q');
         if (q) { q.value = ''; root.querySelector('#search').classList.remove('has'); }
-        renderRail(); renderFreq(); renderList();
+        renderRail(); renderList();
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
@@ -396,7 +457,7 @@
         view.open = false;
         view.sub = '';
         view.shown = 40;
-        renderRail(); renderFreq(); renderList();
+        renderRail(); renderList();
         return;
       }
 
@@ -405,7 +466,7 @@
         view.sub = sub.dataset.sub === view.sub ? '' : sub.dataset.sub;
         view.keyword = '';
         view.shown = 40;
-        renderRail(); renderFreq(); renderList();
+        renderRail(); renderList();
         return;
       }
 
@@ -428,7 +489,6 @@
       view.shown = 40;
       search.classList.toggle('has', !!input.value);
       renderRail();
-      renderFreq();
       renderList();
     }, 180));
 
@@ -436,7 +496,7 @@
       input.value = '';
       view.keyword = '';
       search.classList.remove('has');
-      renderRail(); renderFreq(); renderList();
+      renderRail(); renderList();
       input.focus();
     };
 
@@ -448,7 +508,6 @@
 
     renderCtx();
     renderRail();
-    renderFreq();
     renderList();
     renderCart();
   };

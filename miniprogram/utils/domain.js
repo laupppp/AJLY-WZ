@@ -1,8 +1,9 @@
 // 业务规则层：由 V1.24 server.js 移植（试算、分级审批、部门采购、接单、配送、验收、对账、SLA）
 // 所有函数在传入的 state 上原地修改，校验失败抛出 Error，文案与网页版保持一致。
-const { CATALOG, STORES, zoneOf } = require('../data/catalog');
-const { SLA_HOURS, STAFF } = require('../data/seed');
+const { CATALOG, STORES, CATEGORY_ORDER, zoneOf } = require('../data/catalog');
+const { SLA_HOURS, STAFF, SUPPLIERS } = require('../data/seed');
 const BUDGET = require('../data/budget');
+const { APPROVAL_DEFAULT, APPROVAL_LIMITS, CONTRACTS_DEFAULT } = require('../data/rules');
 const fmt = require('./format');
 
 const CATALOG_BY_ID = {};
@@ -22,6 +23,535 @@ function uid() {
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 }
 
+/* ------------------- 动态物资目录 / 供应商 / 合同 / 审批规则（中台操作台） -------------------
+ * 基础数据来自 data/catalog.js 与 data/rules.js；运营管理部在中台操作台做的增删改
+ * 存放在 state.catalogCustom / state.contracts / state.approvalConfig，两端实时生效。
+ */
+function syncCatalogCache(list) {
+  Object.keys(CATALOG_BY_ID).forEach(function (k) { delete CATALOG_BY_ID[k]; });
+  list.forEach(function (p) { CATALOG_BY_ID[p.id] = p; });
+}
+
+function catalogStateOf(state) {
+  if (!state) return { added: [], updated: {}, deleted: {} };
+  if (!state.catalogCustom || typeof state.catalogCustom !== 'object') {
+    state.catalogCustom = { added: [], updated: {}, deleted: {} };
+  }
+  const c = state.catalogCustom;
+  if (!Array.isArray(c.added)) c.added = [];
+  if (!c.updated || typeof c.updated !== 'object') c.updated = {};
+  if (!c.deleted || typeof c.deleted !== 'object') c.deleted = {};
+  return c;
+}
+
+function normalizeScope(item) {
+  return item && (item.purchaseScope === 'central' || item.centralOnly === true) ? 'central' : 'all';
+}
+
+function canActorBuyItem(item, session) {
+  if (!item) return false;
+  if (normalizeScope(item) === 'central') {
+    return !!(session && session.role === 'central');
+  }
+  return true;
+}
+
+// 当前生效的完整物资清单（含中台新增/编辑，默认不含已删除；includeDeleted=true 时保留并标 deleted:true；传 buyer 时按采购权限过滤）
+function catalogOf(state, opts) {
+  const c = catalogStateOf(state);
+  const includeDeleted = opts && opts.includeDeleted;
+  const activeOnly = opts && opts.activeOnly;
+  const buyer = opts && opts.buyer;
+  const out = [];
+  const seen = {};
+
+  CATALOG.forEach(function (base) {
+    seen[base.id] = 1;
+    const isDel = !!c.deleted[base.id];
+    if (isDel && !includeDeleted) return;
+    const patch = c.updated[base.id] || {};
+    const merged = Object.assign({}, base, patch, {
+      id: base.id,
+      enabled: patch.enabled === undefined ? (base.enabled !== false) : !!patch.enabled,
+      deleted: isDel,
+      isCustom: false,
+      isModified: Object.keys(patch).length > 0
+    });
+    merged.purchaseScope = normalizeScope(merged);
+    merged.centralOnly = merged.purchaseScope === 'central';
+    if (activeOnly && (!merged.enabled || merged.deleted)) return;
+    if (buyer && !canActorBuyItem(merged, buyer)) return;
+    out.push(merged);
+  });
+
+  (c.added || []).forEach(function (raw) {
+    if (!raw || !raw.id || seen[raw.id]) return;
+    seen[raw.id] = 1;
+    const isDel = !!c.deleted[raw.id];
+    if (isDel && !includeDeleted) return;
+    const patch = c.updated[raw.id] || {};
+    const merged = Object.assign({}, raw, patch, {
+      id: raw.id,
+      enabled: patch.enabled === undefined ? (raw.enabled !== false) : !!patch.enabled,
+      deleted: isDel,
+      isCustom: true,
+      isModified: Object.keys(patch).length > 0
+    });
+    merged.purchaseScope = normalizeScope(merged);
+    merged.centralOnly = merged.purchaseScope === 'central';
+    if (activeOnly && (!merged.enabled || merged.deleted)) return;
+    if (buyer && !canActorBuyItem(merged, buyer)) return;
+    out.push(merged);
+  });
+
+  if (!includeDeleted && !activeOnly && !buyer) syncCatalogCache(out);
+  return out;
+}
+
+function catalogMapOf(state) {
+  const list = catalogOf(state);
+  const map = {};
+  list.forEach(function (p) { map[p.id] = p; });
+  return map;
+}
+
+function suppliersOf(state) {
+  const set = {};
+  (SUPPLIERS || []).forEach(function (s) { if (s) set[s] = 1; });
+  catalogOf(state, { includeDeleted: true }).forEach(function (p) { if (p.supplier) set[p.supplier] = 1; });
+  ((state && state.contracts) || CONTRACTS_DEFAULT).forEach(function (c) { if (c && c.supplier) set[c.supplier] = 1; });
+  return Object.keys(set);
+}
+
+// 新增或编辑物资（中台）
+function saveCatalogItem(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可维护物资目录');
+  const p = payload || {};
+  const c = catalogStateOf(state);
+  const all = catalogOf(state, { includeDeleted: true });
+  const byId = {};
+  all.forEach(function (x) { byId[x.id] = x; });
+
+  const LEGACY_CAT_MAP = {
+    '活动及社群物资': '社群活动物资',
+    '奖品礼品': '客诉维护物资',
+    '日常运营耗材': '客诉维护物资',
+    '员工物资': '客诉维护物资',
+    '宣传印刷物料': '印刷品物料'
+  };
+  const name = String(p.name || '').trim();
+  if (!name || name.length > 60) throw new Error('请填写1至60字的物资名称');
+  const rawCat = String(p.category || '').trim();
+  const category = LEGACY_CAT_MAP[rawCat] || rawCat;
+  if (CATEGORY_ORDER.indexOf(category) < 0) throw new Error('请选择有效的物资大类');
+  const unit = String(p.unit || '').trim() || '个';
+  if (unit.length > 16) throw new Error('计量单位不超过16字');
+  const spec = String(p.spec || '').trim().slice(0, 120);
+  const supplier = String(p.supplier || '').trim();
+  if (!supplier || supplier.length > 60) throw new Error('请填写或选择供应商');
+  const price = round2(Number(p.price));
+  if (!isFinite(price) || price <= 0 || price > 1000000) throw new Error('单价需在 0.01 到 1,000,000 元之间');
+  const note = String(p.note || '').trim().slice(0, 200);
+  const budgetItem = p.budgetItem && BUDGET.NAME[p.budgetItem] ? p.budgetItem : '';
+  const enabled = p.enabled === undefined ? true : !!p.enabled;
+  const purchaseScope = (p.purchaseScope === 'central' || p.centralOnly === true) ? 'central' : 'all';
+  const centralOnly = purchaseScope === 'central';
+
+  let id = String(p.id || '').trim().toUpperCase();
+  const isEdit = !!p.isEdit;
+  const now = new Date().toISOString();
+
+  if (isEdit) {
+    if (!id || !byId[id]) throw new Error('找不到要修改的物资：' + id);
+    delete c.deleted[id];
+    c.updated[id] = {
+      name: name, category: category, spec: spec, unit: unit,
+      price: price, supplier: supplier, note: note,
+      budgetItem: budgetItem || '',
+      purchaseScope: purchaseScope,
+      centralOnly: centralOnly,
+      enabled: enabled,
+      updatedAt: now,
+      updatedBy: session.id
+    };
+    const next = catalogOf(state);
+    const saved = next.filter(function (x) { return x.id === id; })[0];
+    return {
+      item: saved,
+      created: false,
+      audit: {
+        orderId: id, kind: 'catalog', stage: 'catalog-edit', decision: '修改物资',
+        role: '运营管理部（' + session.id + '）', from: '', to: '',
+        note: name + '（' + category + '，¥' + fmt.money(price) + '/' + unit + (centralOnly ? '，仅中台采购' : '') + '）',
+        at: now
+      }
+    };
+  }
+
+  if (!id) {
+    const prefix = category === '印刷品物料' ? 'AD' : 'WZ';
+    let maxNum = 0;
+    all.forEach(function (x) {
+      const m = String(x.id || '').match(new RegExp('^' + prefix + '-(\\d+)$'));
+      if (m && Number(m[1]) > maxNum) maxNum = Number(m[1]);
+    });
+    id = prefix + '-' + String(maxNum + 1).padStart(3, '0');
+  } else if (!/^[A-Z0-9_-]{2,24}$/.test(id)) {
+    throw new Error('物资编号仅支持大写字母、数字、下划线或连字符（2-24位）');
+  }
+  if (byId[id] && !c.deleted[id]) throw new Error('物资编号已存在：' + id);
+
+  delete c.deleted[id];
+  delete c.updated[id];
+  const item = {
+    id: id, name: name, spec: spec, unit: unit, price: price,
+    supplier: supplier, category: category, note: note,
+    budgetItem: budgetItem || '',
+    purchaseScope: purchaseScope,
+    centralOnly: centralOnly,
+    enabled: enabled, demoOnly: false,
+    createdAt: now, createdBy: session.id
+  };
+  c.added = c.added.filter(function (x) { return x.id !== id; });
+  c.added.unshift(item);
+  catalogOf(state);
+  return {
+    item: Object.assign({ isCustom: true, enabled: enabled }, item),
+    created: true,
+    audit: {
+      orderId: id, kind: 'catalog', stage: 'catalog-add', decision: '新增物资',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: name + '（' + category + '，¥' + fmt.money(price) + '/' + unit + (centralOnly ? '，仅中台采购' : '') + '）',
+      at: now
+    }
+  };
+}
+
+// 采购权限范围切换（仅运营管理部可设置：'central' 仅中台采购 / 'all' 门店及各部门均可自行下单）
+function setCatalogItemScope(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可设置物资采购权限');
+  const p = payload || {};
+  const map = catalogMapOf(state);
+  const c = catalogStateOf(state);
+  const ids = Array.isArray(p.ids) && p.ids.length ? p.ids : [String(p.id || '').trim()];
+  if (!ids[0]) throw new Error('请选择要设置的物资');
+  const now = new Date().toISOString();
+  const changed = [];
+  let lastScope = 'all';
+
+  ids.forEach(function (id) {
+    const cur = map[id];
+    if (!cur) throw new Error('找不到物资：' + id);
+    const nextScope = p.purchaseScope === 'central' || p.purchaseScope === 'all'
+      ? p.purchaseScope
+      : (normalizeScope(cur) === 'central' ? 'all' : 'central');
+    lastScope = nextScope;
+    c.updated[id] = Object.assign({}, c.updated[id] || {}, {
+      purchaseScope: nextScope,
+      centralOnly: nextScope === 'central',
+      updatedAt: now,
+      updatedBy: session.id
+    });
+    changed.push(cur.name + '（' + id + '）');
+  });
+
+  catalogOf(state);
+  return {
+    id: ids[0],
+    ids: ids,
+    name: changed.length === 1 ? map[ids[0]].name : (changed.length + ' 项物资'),
+    purchaseScope: lastScope,
+    centralOnly: lastScope === 'central',
+    audit: {
+      orderId: ids.length === 1 ? ids[0] : '',
+      kind: 'catalog',
+      stage: 'catalog-scope',
+      decision: lastScope === 'central' ? '设为仅中台采购' : '开放全员下单',
+      role: '运营管理部（' + session.id + '）',
+      from: '', to: '',
+      note: changed.slice(0, 5).join('、') + (changed.length > 5 ? ' 等' + changed.length + '项' : ''),
+      at: now
+    }
+  };
+}
+
+// 上下架切换
+function toggleCatalogItem(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可上下架物资');
+  const id = String((payload && payload.id) || '').trim();
+  const map = catalogMapOf(state);
+  const cur = map[id];
+  if (!cur) throw new Error('找不到物资：' + id);
+  const c = catalogStateOf(state);
+  const nextEnabled = payload.enabled === undefined ? !cur.enabled : !!payload.enabled;
+  const now = new Date().toISOString();
+  c.updated[id] = Object.assign({}, c.updated[id] || {}, {
+    enabled: nextEnabled,
+    updatedAt: now,
+    updatedBy: session.id
+  });
+  catalogOf(state);
+  return {
+    id: id,
+    name: cur.name,
+    enabled: nextEnabled,
+    audit: {
+      orderId: id, kind: 'catalog', stage: 'catalog-toggle', decision: nextEnabled ? '上架物资' : '下架物资',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: cur.name + '（' + id + '）',
+      at: now
+    }
+  };
+}
+
+// 删除物资：若有未完结订单引用该物资，禁止直接删除（建议先下架）；历史已完成单不受影响
+function deleteCatalogItem(state, session, id) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可删除物资');
+  const targetId = String(id || '').trim();
+  const all = catalogOf(state, { includeDeleted: true });
+  const item = all.filter(function (x) { return x.id === targetId && !x.deleted; })[0];
+  if (!item) throw new Error('物资不存在或已删除');
+
+  const activeOrder = (state.orders || []).filter(function (o) {
+    if (['done', 'cancelled', 'rejected'].indexOf(o.status) >= 0) return false;
+    return (o.items || []).some(function (x) { return x.id === targetId; });
+  })[0];
+  if (activeOrder) {
+    throw new Error('在途订单 ' + activeOrder.id + ' 包含该物资，请先设为「下架」或等订单完结后再删除');
+  }
+
+  const now = new Date().toISOString();
+  const c = catalogStateOf(state);
+  c.deleted[targetId] = { at: now, by: session.id, name: item.name };
+  catalogOf(state);
+  return {
+    id: targetId,
+    name: item.name,
+    audit: {
+      orderId: targetId, kind: 'catalog', stage: 'catalog-delete', decision: '删除物资',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: item.name + '（' + targetId + '）',
+      at: now
+    }
+  };
+}
+
+// 恢复已删除物资
+function restoreCatalogItem(state, session, id) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可恢复物资');
+  const targetId = String(id || '').trim();
+  const c = catalogStateOf(state);
+  if (!c.deleted[targetId]) throw new Error('该物资未被删除');
+  delete c.deleted[targetId];
+  const list = catalogOf(state);
+  const item = list.filter(function (x) { return x.id === targetId; })[0];
+  const now = new Date().toISOString();
+  const itemName = (item && item.name) || targetId;
+  return {
+    id: targetId,
+    name: itemName,
+    audit: {
+      orderId: targetId, kind: 'catalog', stage: 'catalog-restore', decision: '恢复物资',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: itemName + '（' + targetId + '）',
+      at: now
+    }
+  };
+}
+
+/* ------------------- 门店审批规则配置 ------------------- */
+function approvalConfigOf(state) {
+  const raw = (state && state.approvalConfig) || {};
+  const autoMax = isFinite(Number(raw.autoMax)) ? round2(Number(raw.autoMax)) : APPROVAL_DEFAULT.autoMax;
+  const regionMax = isFinite(Number(raw.regionMax)) ? round2(Number(raw.regionMax)) : APPROVAL_DEFAULT.regionMax;
+  const splitDays = isFinite(Number(raw.splitDays)) ? Math.round(Number(raw.splitDays)) : APPROVAL_DEFAULT.splitDays;
+  return {
+    autoMax: autoMax,
+    regionMax: Math.max(autoMax, regionMax),
+    splitGuard: raw.splitGuard === undefined ? APPROVAL_DEFAULT.splitGuard : !!raw.splitGuard,
+    splitDays: Math.max(1, Math.min(31, splitDays)),
+    autoSkipReview: raw.autoSkipReview === undefined ? APPROVAL_DEFAULT.autoSkipReview : !!raw.autoSkipReview
+  };
+}
+
+function saveApprovalConfig(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可调整审批规则');
+  const p = payload || {};
+  const cur = approvalConfigOf(state);
+  const autoMax = p.autoMax === undefined ? cur.autoMax : round2(Number(p.autoMax));
+  const regionMax = p.regionMax === undefined ? cur.regionMax : round2(Number(p.regionMax));
+  const splitDays = p.splitDays === undefined ? cur.splitDays : Math.round(Number(p.splitDays));
+  if (!isFinite(autoMax) || autoMax < APPROVAL_LIMITS.autoMax[0] || autoMax > APPROVAL_LIMITS.autoMax[1]) {
+    throw new Error('小额上限需在 ' + APPROVAL_LIMITS.autoMax[0] + ' 到 ' + APPROVAL_LIMITS.autoMax[1] + ' 元之间');
+  }
+  if (!isFinite(regionMax) || regionMax < autoMax || regionMax > APPROVAL_LIMITS.regionMax[1]) {
+    throw new Error('战区终审上限需不小于小额上限，且不超过 ' + APPROVAL_LIMITS.regionMax[1] + ' 元');
+  }
+  if (!isFinite(splitDays) || splitDays < APPROVAL_LIMITS.splitDays[0] || splitDays > APPROVAL_LIMITS.splitDays[1]) {
+    throw new Error('防拆单统计天数需在 1 到 31 天之间');
+  }
+  state.approvalConfig = {
+    autoMax: autoMax,
+    regionMax: regionMax,
+    splitGuard: p.splitGuard === undefined ? cur.splitGuard : !!p.splitGuard,
+    splitDays: splitDays,
+    autoSkipReview: p.autoSkipReview === undefined ? cur.autoSkipReview : !!p.autoSkipReview
+  };
+  const now = new Date().toISOString();
+  return {
+    config: state.approvalConfig,
+    audit: {
+      orderId: '', kind: 'rules', stage: 'rules-save', decision: '更新审批规则',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: '小额≤¥' + fmt.money(autoMax) + '，战区终审≤¥' + fmt.money(regionMax) +
+        (state.approvalConfig.splitGuard ? '，防拆单' + splitDays + '天' : '，关闭防拆单') +
+        (state.approvalConfig.autoSkipReview ? '，小额免审直发' : ''),
+      at: now
+    }
+  };
+}
+
+// 某门店近 N 天已提交的有效订单累计金额（分）——用于防拆单定档（支持按同费用科目过滤且排除已中台审批大单）
+function recentStoreCents(state, store, days, excludeId, budgetKeys) {
+  const windowMs = (days || APPROVAL_DEFAULT.splitDays) * 86400000;
+  const now = Date.now();
+  const keys = Array.isArray(budgetKeys) && budgetKeys.length ? budgetKeys : null;
+  let sum = 0;
+  (state.orders || []).forEach(function (o) {
+    if (!o || o.id === excludeId) return;
+    if (o.purchaseType === 'department' || o.store !== store) return;
+    if (['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
+    if (o.tier === 'central') return;
+    const ts = parseTime(o.createdAt || o.created);
+    if (!isNaN(ts) && now - ts > windowMs) return;
+    if (keys) {
+      const sp = splitOrder(o);
+      keys.forEach(function (k) {
+        if (sp[k]) sum += cents(sp[k].total);
+      });
+    } else {
+      sum += cents(o.total || 0);
+    }
+  });
+  return sum;
+}
+
+/* ------------------- 供应商合同总额上限（职能部门采购） -------------------
+ * 规则：职能部门不设部门预算，但每个供应商签有年度/框架合同总额上限；
+ *       所有有效采购单（已结算按结算金额、未结算按下单金额）累计不得超过该供应商合同总额。
+ */
+function contractsOf(state) {
+  if (!state) return CONTRACTS_DEFAULT.slice();
+  if (!Array.isArray(state.contracts) || !state.contracts.length) {
+    state.contracts = JSON.parse(JSON.stringify(CONTRACTS_DEFAULT));
+  }
+  return state.contracts;
+}
+
+// 订单在各供应商上的有效金额（分）：若已双方确认结算，按确认值或分供应商明细计算；否则按订单明细金额
+function supplierOrderCents(order, supplier) {
+  if (!order || ['rejected', 'cancelled'].indexOf(order.status) >= 0) return 0;
+  const items = (order.items || []).filter(function (x) { return x.supplier === supplier; });
+  if (!items.length) return 0;
+  const rawCents = items.reduce(function (s, x) {
+    return s + cents(Number(x.price || 0) * Number(x.qty || 0));
+  }, 0);
+  const settle = order.settlement;
+  if (settle && settle.status === 'confirmed' && isFinite(Number(settle.amount))) {
+    if (settle.bySupplier && isFinite(Number(settle.bySupplier[supplier]))) {
+      return cents(settle.bySupplier[supplier]);
+    }
+    const orderRaw = (order.items || []).reduce(function (s, x) {
+      return s + cents(Number(x.price || 0) * Number(x.qty || 0));
+    }, 0);
+    if (orderRaw > 0) return Math.round(cents(settle.amount) * (rawCents / orderRaw));
+  }
+  return rawCents;
+}
+
+function contractSummary(state, excludeOrderId) {
+  const list = contractsOf(state);
+  return list.map(function (c) {
+    const capCents = cents(c.total || 0);
+    let deptUsed = 0;
+    let storeUsed = 0;
+    (state.orders || []).forEach(function (o) {
+      if (!o || o.id === excludeOrderId || ['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
+      const amt = supplierOrderCents(o, c.supplier);
+      if (!amt) return;
+      if (o.purchaseType === 'department') deptUsed += amt;
+      else storeUsed += amt;
+    });
+    const usedCents = deptUsed + storeUsed;
+    const remainCents = Math.max(0, capCents - usedCents);
+    return {
+      id: c.id,
+      supplier: c.supplier,
+      name: c.name || (c.supplier + '框架合同'),
+      total: round2(capCents / 100),
+      deptUsed: round2(deptUsed / 100),
+      storeUsed: round2(storeUsed / 100),
+      used: round2(usedCents / 100),
+      remaining: round2(remainCents / 100),
+      usedPct: capCents > 0 ? Math.min(100, Math.round(usedCents / capCents * 100)) : 0,
+      start: c.start || '',
+      end: c.end || '',
+      note: c.note || ''
+    };
+  });
+}
+
+function saveContract(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可维护合同上限');
+  const p = payload || {};
+  const list = contractsOf(state);
+  const supplier = String(p.supplier || '').trim();
+  if (!supplier) throw new Error('请选择或填写供应商名称');
+  const name = String(p.name || '').trim() || (supplier + '采购合同');
+  const total = round2(Number(p.total));
+  if (!isFinite(total) || total <= 0 || total > 100000000) throw new Error('合同总额需在 0.01 到 1 亿元之间');
+  let id = String(p.id || '').trim();
+  const now = new Date().toISOString();
+  const existing = list.filter(function (c) { return (id && c.id === id) || c.supplier === supplier; })[0];
+  if (existing) {
+    existing.supplier = supplier;
+    existing.name = name;
+    existing.total = total;
+    existing.start = String(p.start || existing.start || '').slice(0, 20);
+    existing.end = String(p.end || existing.end || '').slice(0, 20);
+    existing.note = String(p.note !== undefined ? p.note : (existing.note || '')).slice(0, 120);
+    return {
+      contract: existing,
+      created: false,
+      audit: {
+        orderId: existing.id, kind: 'contract', stage: 'contract-edit', decision: '调整合同上限',
+        role: '运营管理部（' + session.id + '）', from: '', to: '',
+        note: supplier + '（总额 ¥' + fmt.money(total) + '）',
+        at: now
+      }
+    };
+  }
+  if (!id) id = 'HT-' + new Date().getFullYear() + '-' + String(list.length + 1).padStart(3, '0');
+  const row = {
+    id: id, supplier: supplier, name: name, total: total,
+    start: String(p.start || '').slice(0, 20),
+    end: String(p.end || '').slice(0, 20),
+    note: String(p.note || '').slice(0, 120)
+  };
+  list.push(row);
+  return {
+    contract: row,
+    created: true,
+    audit: {
+      orderId: row.id, kind: 'contract', stage: 'contract-add', decision: '新增供应商合同',
+      role: '运营管理部（' + session.id + '）', from: '', to: '',
+      note: supplier + '（总额 ¥' + fmt.money(total) + '）',
+      at: now
+    }
+  };
+}
+
+
 /* ------------------- 费用预算（门店 × 科目） -------------------
  * 额度 = 房间数 × 科目系数（中台可按门店改系数或直接定额），再叠加手工增减：
  *   adjust>0  机动预算池追加 / 其他门店调剂进来
@@ -38,13 +568,14 @@ function flexCentsOf(state) {
 }
 
 // 订单在各科目上的金额：{ key: { total, accepted } }（元）
+// 若订单已双方确认结算（settlement.status === 'confirmed'），按最终结算金额同比例分摊到各科目，释放折让部分的预算占用
 function splitOrder(order) {
   const out = {};
   BUDGET.KEYS.forEach(function (k) { out[k] = { total: 0, accepted: 0 }; });
   if (!order) return out;
   (order.items || []).forEach(function (x) {
     const p = CATALOG_BY_ID[x.id];
-    const k = BUDGET.itemOf(p || x);
+    const k = BUDGET.itemOf(x.budgetItem ? x : (p || x));
     // 订单行通常带 price；历史数据缺失时回退到目录价，避免金额算成 0
     const price = Number(x.price !== undefined ? x.price : (p && p.price) || 0);
     const total = price * Number(x.qty || 0);
@@ -53,6 +584,43 @@ function splitOrder(order) {
     out[k].total = round2(out[k].total + total);
     out[k].accepted = round2(out[k].accepted + accepted);
   });
+  const settle = order.settlement;
+  if (settle && settle.status === 'confirmed' && isFinite(Number(settle.amount))) {
+    if (settle.bySupplier && typeof settle.bySupplier === 'object') {
+      const supRaw = {};
+      const nextOut = {};
+      BUDGET.KEYS.forEach(function (k) { nextOut[k] = { total: 0, accepted: 0 }; });
+      (order.items || []).forEach(function (x) {
+        const p = CATALOG_BY_ID[x.id];
+        const price = Number(x.price !== undefined ? x.price : (p && p.price) || 0);
+        const raw = price * Number(x.qty || 0);
+        const sup = x.supplier || '_';
+        supRaw[sup] = (supRaw[sup] || 0) + raw;
+      });
+      (order.items || []).forEach(function (x) {
+        const p = CATALOG_BY_ID[x.id];
+        const k = BUDGET.itemOf(x.budgetItem ? x : (p || x));
+        const price = Number(x.price !== undefined ? x.price : (p && p.price) || 0);
+        const raw = price * Number(x.qty || 0);
+        const sup = x.supplier || '_';
+        const supSettled = isFinite(Number(settle.bySupplier[sup])) ? Number(settle.bySupplier[sup]) : supRaw[sup];
+        const scaled = supRaw[sup] > 0 ? round2(raw * (supSettled / supRaw[sup])) : 0;
+        if (!nextOut[k]) nextOut[k] = { total: 0, accepted: 0 };
+        nextOut[k].total = round2(nextOut[k].total + scaled);
+        nextOut[k].accepted = round2(nextOut[k].accepted + scaled);
+      });
+      return nextOut;
+    }
+    const rawSum = BUDGET.KEYS.reduce(function (s, k) { return s + out[k].total; }, 0);
+    if (rawSum > 0) {
+      const ratio = Number(settle.amount) / rawSum;
+      BUDGET.KEYS.forEach(function (k) {
+        const scaled = round2(out[k].total * ratio);
+        out[k].total = scaled;
+        out[k].accepted = scaled;
+      });
+    }
+  }
   return out;
 }
 
@@ -317,6 +885,7 @@ function computeQuote(state, input) {
   if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 80) {
     throw new Error('请选择1至80项物料');
   }
+  const catMap = catalogMapOf(state);
   let totalCents = 0;
   const confirmed = [];
   const seen = {};
@@ -326,9 +895,13 @@ function computeQuote(state, input) {
     }
     if (seen[line.id]) throw new Error('商品重复，请在一行填写数量');
     seen[line.id] = 1;
-    const item = CATALOG_BY_ID[line.id];
-    if (!item) throw new Error('商品未找到：' + line.id);
-    if (typeof item.price !== 'number' || !isFinite(item.price) || item.price < 0) {
+    const item = catMap[line.id] || CATALOG_BY_ID[line.id];
+    if (!item || item.deleted) throw new Error('商品未找到：' + line.id);
+    if (item.enabled === false) throw new Error('商品已下架，暂不能下单：' + item.name);
+    if (normalizeScope(item) === 'central') {
+      throw new Error('「' + item.name + '」已设为仅运营管理部（中台）集中采购，门店不可自行下单');
+    }
+    if (typeof item.price !== 'number' || !isFinite(item.price) || item.price <= 0) {
       throw new Error('商品尚无合同价，暂不能下单：' + item.name);
     }
     const unitCents = cents(item.price);
@@ -337,18 +910,18 @@ function computeQuote(state, input) {
   });
   if (totalCents <= 0 || totalCents > 1000000000) throw new Error('试算金额超出演示范围');
 
-  // 按费用科目拆分这笔单：每个科目各自比对可用额度
+  // 按费用科目拆分这笔单：每个科目各自比对可用额度（额度 = 房间数 × 系数）
   const cfg = budgetCfg(state);
   const split = {};
   BUDGET.KEYS.forEach(function (k) { split[k] = { total: 0, usable: 0, over: 0 }; });
   confirmed.forEach(function (line) {
-    const k = BUDGET.itemOf(CATALOG_BY_ID[line.id]);
+    const k = BUDGET.itemOf(catMap[line.id] || CATALOG_BY_ID[line.id]);
     split[k].total = round2(split[k].total + line.amount);
   });
   const budgetRows = BUDGET.KEYS.filter(function (k) {
     return split[k].total > 0;
   }).map(function (k) {
-    const usable = round2(storeUsableCents(state, input.store, null, k) / 100);
+    const usable = round2(storeUsableCents(state, input.store, input.excludeId || null, k) / 100);
     const total = split[k].total;
     return {
       key: k,
@@ -363,16 +936,46 @@ function computeQuote(state, input) {
   });
   const availableCents = cents(budgetRows.reduce(function (s, r) { return s + r.usable; }, 0));
   const overAmountCents = cents(budgetRows.reduce(function (s, r) { return s + r.over; }, 0));
-  // 机动（预留）池能补的上限：超预算是从这里划额度，超出即核不出来，下单端就该提醒拆单
+  // 机动（预留）池能补的上限：超预算是从这里划额度，超出即核不出来，下单端直接拦截
   const flexCents = flexCentsOf(state);
   const maxSupportCents = availableCents + flexCents;
-  const hardOver = totalCents > maxSupportCents;
-  const tier = totalCents <= 50000 ? 'auto' : totalCents <= 200000 ? 'region' : 'central';
+  const hardOver = overAmountCents > flexCents;
+
+  // 审批定档：支持中台自定义阈值 + 近 N 天同店同科目累计防拆单
+  const ac = approvalConfigOf(state);
+  const autoMaxCents = cents(ac.autoMax);
+  const regionMaxCents = cents(ac.regionMax);
+  const activeKeys = budgetRows.map(function (r) { return r.key; });
+  const recentCents = ac.splitGuard ? recentStoreCents(state, input.store, ac.splitDays, input.excludeId, activeKeys) : 0;
+  const basisCents = ac.splitGuard ? (totalCents + recentCents) : totalCents;
+  const rawTier = totalCents <= autoMaxCents ? 'auto' : totalCents <= regionMaxCents ? 'region' : 'central';
+  const tier = basisCents <= autoMaxCents ? 'auto' : basisCents <= regionMaxCents ? 'region' : 'central';
+  const splitUpgraded = ac.splitGuard && tier !== rawTier;
+  const autoSkip = overAmountCents <= 0 && tier === 'auto' && ac.autoSkipReview;
+  const nextStep = autoSkip ? 'supplier' : 'order-review';
+
+  let pathText = '';
+  if (hardOver) {
+    pathText = '超出科目可用额度 ¥' + fmt.money(overAmountCents / 100) + '，且超过机动池上限（¥' + fmt.money(flexCents / 100) + '），无法提交，请拆分下单或联系运营管理部';
+  } else if (overAmountCents > 0) {
+    pathText = '提交后先由战区审核（需填写超预算理由），通过后由运营管理部一步完成预算核定与金额审批';
+  } else if (autoSkip) {
+    pathText = '预算内且 ≤¥' + fmt.money(ac.autoMax) + '（含近' + ac.splitDays + '天累计），免战区审核直接发送供应商';
+  } else if (tier === 'auto') {
+    pathText = '提交后由战区审核，通过即发送供应商（≤¥' + fmt.money(ac.autoMax) + ' 免金额审批）';
+  } else if (tier === 'region') {
+    pathText = '提交后由战区一步终审（合规 + ¥' + fmt.money(ac.autoMax) + '–' + fmt.money(ac.regionMax) + ' 金额合并审核），通过即发送供应商' +
+      (splitUpgraded ? '（近' + ac.splitDays + '天累计 ¥' + fmt.money(basisCents / 100) + ' 触发防拆单升级）' : '');
+  } else {
+    pathText = '提交后先由战区审核，再报运营管理部金额审批（>¥' + fmt.money(ac.regionMax) + '）' +
+      (splitUpgraded ? '（近' + ac.splitDays + '天累计 ¥' + fmt.money(basisCents / 100) + ' 触发防拆单升级）' : '');
+  }
+
   return {
     total: totalCents / 100,
     available: availableCents / 100,
     availableAll: round2(BUDGET.KEYS.reduce(function (s, k) {
-      return s + storeUsableCents(state, input.store, null, k) / 100;
+      return s + storeUsableCents(state, input.store, input.excludeId || null, k) / 100;
     }, 0)),
     budgetItems: budgetRows,
     overAmount: overAmountCents / 100,
@@ -381,34 +984,37 @@ function computeQuote(state, input) {
     maxSupport: maxSupportCents / 100,
     hardOver: hardOver,
     tier: tier,
+    rawTier: rawTier,
+    splitUpgraded: splitUpgraded,
+    recentTotal: recentCents / 100,
+    cumulativeTotal: basisCents / 100,
+    splitDays: ac.splitDays,
     tierLabel: fmt.TIER_LABEL[tier],
-    nextStep: 'order-review',
+    nextStep: nextStep,
     items: confirmed,
-    pathText: hardOver
-      ? '超出可用预算，且超过「科目额度 + 机动池」可核定上限，需拆分下单或转专项采购'
-      : overAmountCents > 0
-        ? '提交后先由战区审核；超出科目额度，审核通过后转运营管理部核定预算'
-        : tier === 'auto'
-          ? '提交后先由战区审核，通过即发送供应商（500元以内免金额审批）'
-          : tier === 'region'
-            ? '提交后先由战区审核，再走战区金额审批（500-2000元）'
-            : '提交后先由战区审核，再报运营管理部金额审批（2000元以上）'
+    pathText: pathText
   };
 }
 
 /* ------------------------- 门店下单 ------------------------- */
-function createStoreOrder(state, session, input) {
-  if (!session || session.role !== 'store') throw new Error('请先切换为门店店长身份');
-  if (!session.stores || session.stores.indexOf(input.store) < 0) throw new Error('该测试店长无此门店权限');
+function createSingleStoreOrder(state, session, input, groupId) {
   const details = input.details || {};
   const address = String(details.address || '').trim();
   const receiver = String(details.receiver || '').trim();
-  if (!address || !receiver || address.length > 180 || receiver.length > 80) throw new Error('请检查收货地址和联系人');
   const purpose = String(details.purpose || '门店日常运营').slice(0, 80);
   const note = String(details.note || '').slice(0, 500);
+  const overReason = String(details.overReason || input.overReason || '').trim().slice(0, 200);
   const due = String(details.due || '').slice(0, 80) || '待供应商确认';
 
   const quote = computeQuote(state, input);
+  if (quote.hardOver) {
+    throw new Error('超出门店科目可用额度与机动池可核定上限（最多可核定 ¥' + fmt.money(quote.maxSupport) + '），请缩减数量、拆分下单或联系运营管理部');
+  }
+  if (quote.overBudget && overReason && overReason.length < 4) {
+    throw new Error('超预算原因至少填写 4 个字');
+  }
+
+  const catMap = catalogMapOf(state);
   const number = Math.max.apply(null, [Number(state.seq) || 0].concat(state.orders.map(function (o) {
     const m = String(o.id || '').match(/^SQ-(\d+)$/);
     return m ? Number(m[1]) : 0;
@@ -416,22 +1022,28 @@ function createStoreOrder(state, session, input) {
   const id = 'SQ-' + String(number).padStart(4, '0');
 
   const items = quote.items.map(function (line) {
-    const p = CATALOG_BY_ID[line.id];
+    const p = catMap[line.id] || CATALOG_BY_ID[line.id];
     return {
       id: p.id, name: p.name, spec: p.spec, unit: p.unit, price: line.unitPrice,
-      supplier: p.supplier, category: p.category, demoOnly: p.demoOnly,
+      supplier: p.supplier, category: p.category, budgetItem: p.budgetItem, demoOnly: p.demoOnly,
       qty: line.qty, accepted: 0, reconciled: 0
     };
   });
+  const now = new Date().toISOString();
+  const initStatus = quote.nextStep || 'order-review';
   const supplierRecords = {};
   items.forEach(function (p) {
-    supplierRecords[p.supplier] = { status: 'pending', delivered: false };
+    supplierRecords[p.supplier] = {
+      status: 'pending',
+      delivered: false,
+      pendingSince: initStatus === 'supplier' ? now : null
+    };
   });
 
-  const now = new Date().toISOString();
   const order = {
     id: id,
     purchaseType: 'store',
+    groupId: groupId || null,
     store: input.store,
     zone: zoneOf(input.store) || session.zone || '',
     manager: session.name,
@@ -439,13 +1051,14 @@ function createStoreOrder(state, session, input) {
     items: items,
     total: quote.total,
     tier: quote.tier,
+    splitUpgraded: quote.splitUpgraded,
     overPending: quote.overBudget,
     overAmount: quote.overAmount,
-    regionApproved: false,
+    overReason: overReason,
+    regionApproved: initStatus === 'supplier',
     centralApproved: false,
     budgetApproved: !quote.overBudget,
-    // 门店单统一先经战区审核：额度/合规由战区把关，通过后再按金额分级
-    status: 'order-review',
+    status: initStatus,
     purpose: purpose,
     address: address,
     receiver: receiver,
@@ -453,18 +1066,113 @@ function createStoreOrder(state, session, input) {
     note: note,
     created: fmt.nowText(),
     createdAt: now,
-    supplierSentAt: null,
+    supplierSentAt: initStatus === 'supplier' ? now : null,
     stageStartedAt: now,
     supplierRecords: supplierRecords,
     budgetApplied: false,
-    quoteSource: 'miniprogram-v1.24'
+    quoteSource: 'miniprogram-v1.26'
   };
   state.orders.unshift(order);
   state.seq = number;
   return { order: order, quote: quote };
 }
 
-/* ------------------------- 职能部门采购 ------------------------- */
+function createStoreOrder(state, session, input) {
+  if (!session || session.role !== 'store') throw new Error('请先切换为门店店长身份');
+  if (!session.stores || session.stores.indexOf(input.store) < 0) throw new Error('该测试店长无此门店权限');
+  const details = input.details || {};
+  const address = String(details.address || '').trim();
+  const receiver = String(details.receiver || '').trim();
+  if (!address || !receiver || address.length > 180 || receiver.length > 80) throw new Error('请检查收货地址和联系人');
+
+  const wholeQuote = computeQuote(state, input);
+  if (wholeQuote.hardOver) {
+    throw new Error('超出门店科目可用额度与机动池可核定上限（最多可核定 ¥' + fmt.money(wholeQuote.maxSupport) + '），请缩减数量、拆分下单或联系运营管理部');
+  }
+  const overReason = String(details.overReason || input.overReason || '').trim();
+  if (wholeQuote.overBudget && overReason && overReason.length < 4) {
+    throw new Error('超预算原因至少填写 4 个字');
+  }
+
+  if (input.splitByContract) {
+    const catMap = catalogMapOf(state);
+    const bySupplier = {};
+    const supOrder = [];
+    (input.items || []).forEach(function (line) {
+      const p = catMap[line.id] || CATALOG_BY_ID[line.id];
+      const sup = (p && p.supplier) || '其他供应商';
+      if (!bySupplier[sup]) { bySupplier[sup] = []; supOrder.push(sup); }
+      bySupplier[sup].push(line);
+    });
+    if (supOrder.length > 1) {
+      const groupId = 'SG-' + new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14) + '-' + ((Number(state.seq) || 0) + 1);
+      const created = supOrder.map(function (sup) {
+        return createSingleStoreOrder(state, session, Object.assign({}, input, { items: bySupplier[sup] }), groupId).order;
+      });
+      return { order: created[0], orders: created, quote: wholeQuote, splitByContract: true, groupId: groupId };
+    }
+  }
+
+  const single = createSingleStoreOrder(state, session, input, null);
+  return { order: single.order, orders: [single.order], quote: single.quote, splitByContract: false };
+}
+
+/* ------------------------- 职能部门采购（不设预算，受供应商合同总额上限约束） ------------------------- */
+function checkContractCap(state, bySupplierCents) {
+  const summaries = contractSummary(state);
+  const bySup = {};
+  summaries.forEach(function (c) { bySup[c.supplier] = c; });
+  Object.keys(bySupplierCents).forEach(function (sup) {
+    const needCents = bySupplierCents[sup];
+    if (needCents <= 0) return;
+    const contract = bySup[sup];
+    if (!contract) return;
+    const remainCents = cents(contract.remaining);
+    if (needCents > remainCents) {
+      throw new Error(
+        '超出「' + sup + '」合同总额上限（合同总额 ¥' + fmt.money(contract.total) +
+        '，剩余可用 ¥' + fmt.money(contract.remaining) +
+        '，本次申请 ¥' + fmt.money(needCents / 100) + '）'
+      );
+    }
+  });
+}
+
+function computeDepartmentQuote(state, items) {
+  const catMap = catalogMapOf(state);
+  const bySupplier = {};
+  let totalCents = 0;
+  (items || []).forEach(function (raw) {
+    const p = catMap[raw.id] || CATALOG_BY_ID[raw.id];
+    if (!p || p.deleted || p.enabled === false) return;
+    const amt = cents(p.price) * Number(raw.qty || 0);
+    totalCents += amt;
+    bySupplier[p.supplier] = (bySupplier[p.supplier] || 0) + amt;
+  });
+  const summaries = contractSummary(state);
+  const contractRows = summaries.filter(function (c) { return bySupplier[c.supplier] > 0; }).map(function (c) {
+    const apply = round2((bySupplier[c.supplier] || 0) / 100);
+    const over = round2(Math.max(0, apply - c.remaining));
+    return {
+      id: c.id,
+      supplier: c.supplier,
+      name: c.name,
+      total: c.total,
+      used: c.used,
+      remaining: c.remaining,
+      apply: apply,
+      over: over,
+      overCap: over > 0
+    };
+  });
+  const overCap = contractRows.some(function (r) { return r.overCap; });
+  return {
+    total: round2(totalCents / 100),
+    contractRows: contractRows,
+    overCap: overCap
+  };
+}
+
 function createDepartmentOrders(state, session, input) {
   if (!session || ['department', 'central'].indexOf(session.role) < 0 || !session.department) {
     throw new Error('请切换为职能部门或运营管理部身份');
@@ -472,10 +1180,12 @@ function createDepartmentOrders(state, session, input) {
   if (!input || !Array.isArray(input.destinations) || input.destinations.length < 1 || input.destinations.length > 20) {
     throw new Error('请选择1至20个配送地点');
   }
+  const catMap = catalogMapOf(state);
   const note = String(input.note || '').trim().slice(0, 300);
   const purpose = String(input.purpose || '部门日常采购').slice(0, 80);
   const seenDest = {};
   const validated = [];
+  const bySupplierCents = {};
   let grandCents = 0;
 
   input.destinations.forEach(function (dest) {
@@ -497,13 +1207,20 @@ function createDepartmentOrders(state, session, input) {
       if (!raw || !raw.id || !Number.isSafeInteger(raw.qty) || raw.qty < 1 || raw.qty > 9999) throw new Error('数量须为1至9999的整数');
       if (seenItems[raw.id]) throw new Error('同一地点商品重复');
       seenItems[raw.id] = 1;
-      const p = CATALOG_BY_ID[raw.id];
-      if (!p || typeof p.price !== 'number' || p.price <= 0) throw new Error('所选商品暂不可采购');
+      const p = catMap[raw.id] || CATALOG_BY_ID[raw.id];
+      if (!p || p.deleted || p.enabled === false || typeof p.price !== 'number' || p.price <= 0) {
+        throw new Error('所选商品已下架或暂不可采购');
+      }
+      if (session.role !== 'central' && normalizeScope(p) === 'central') {
+        throw new Error('「' + p.name + '」已设为仅运营管理部（中台）集中采购，请由运营管理部统一下单');
+      }
       const unit = cents(p.price);
-      sum += unit * raw.qty;
+      const lineCents = unit * raw.qty;
+      sum += lineCents;
+      bySupplierCents[p.supplier] = (bySupplierCents[p.supplier] || 0) + lineCents;
       lines.push({
         id: p.id, name: p.name, spec: p.spec, unit: p.unit, price: unit / 100,
-        supplier: p.supplier, category: p.category, demoOnly: p.demoOnly,
+        supplier: p.supplier, category: p.category, budgetItem: p.budgetItem, demoOnly: p.demoOnly,
         qty: raw.qty, accepted: 0, reconciled: 0
       });
     });
@@ -511,6 +1228,9 @@ function createDepartmentOrders(state, session, input) {
     validated.push({ type: dest.type, name: name, address: address, receiver: receiver, items: lines, total: sum / 100 });
   });
   if (grandCents <= 0 || grandCents > 1000000000) throw new Error('金额超出演示范围');
+
+  // 职能部门不设预算，但总费用不得超过所涉供应商合同总额
+  checkContractCap(state, bySupplierCents);
 
   let seq = Math.max.apply(null, [Number(state.seq) || 0].concat(state.orders.map(function (o) {
     const m = String(o.id || '').match(/^SQ-(\d+)$/);
@@ -558,7 +1278,7 @@ function createDepartmentOrders(state, session, input) {
       supplierSentAt: selfPurchase ? now : null,
       supplierRecords: supplierRecords,
       budgetApplied: false,
-      quoteSource: 'department-miniprogram-v1.24'
+      quoteSource: 'department-miniprogram-v1.25'
     });
   });
 
@@ -567,7 +1287,7 @@ function createDepartmentOrders(state, session, input) {
   return { groupId: groupId, orders: generated, total: grandCents / 100 };
 }
 
-function approveDepartmentGroup(state, session, groupId, pass) {
+function approveDepartmentGroup(state, session, groupId, pass, noteText) {
   if (!session || session.role !== 'central') throw new Error('仅运营管理部可确认部门采购');
   if (!/^DP-[0-9]{14}-[0-9]{1,10}$/.test(String(groupId || ''))) throw new Error('采购批次编号无效');
   const orders = (state.orders || []).filter(function (o) {
@@ -575,6 +1295,8 @@ function approveDepartmentGroup(state, session, groupId, pass) {
   });
   if (!orders.length) throw new Error('找不到部门采购批次');
   if (orders.some(function (o) { return o.status !== 'dept-approval'; })) throw new Error('批次已处理，请刷新');
+  const remark = String(noteText || '').trim().slice(0, 200);
+  if (!pass && remark && remark.length < 2) throw new Error('请填写驳回原因');
   const now = new Date().toISOString();
   const audits = [];
   orders.forEach(function (o) {
@@ -582,6 +1304,7 @@ function approveDepartmentGroup(state, session, groupId, pass) {
     o.centralApproved = !!pass;
     o.confirmedAt = now;
     o.stageStartedAt = now;
+    if (!pass && remark) o.rejectReason = remark;
     if (pass) {
       o.supplierSentAt = now;
       Object.keys(o.supplierRecords || {}).forEach(function (k) { o.supplierRecords[k].pendingSince = now; });
@@ -589,17 +1312,60 @@ function approveDepartmentGroup(state, session, groupId, pass) {
     audits.push({
       orderId: o.id, kind: 'approval', stage: 'dept-approval', decision: pass ? '确认采购' : '驳回',
       role: '运营管理部（' + session.id + '，模拟）', from: 'dept-approval', to: o.status,
-      note: '部门采购批次 ' + groupId, at: now
+      note: '部门采购批次 ' + groupId + (remark ? '；说明：' + remark : ''), at: now
     });
   });
   return { count: orders.length, status: pass ? 'supplier' : 'rejected', audits: audits };
 }
 
-/* ------------------------- 审批 ------------------------- */
+/* ------------------------- 审批（优化后：去重合并 + 驳回原因 + 数量微调 + 批量通过） -------------------------
+ * 关键优化：
+ * 1. 预算内 500–2000 元门店单：战区在 order-review 一步终审（合规 + 金额合并），不再二次进入 amount-approval 让同一人点两遍；
+ * 2. 超预算门店单：战区审核通过 → 运营管理部在 budget-central 一步完成「预算核定 + 金额审批」，不再二次进入 amount-approval；
+ * 3. 支持审批时微调商品数量（payload.adjustQuantities: { itemId: newQty }），以及填写审批/驳回意见（payload.note）。
+ */
 function permissionFor(stage, order) {
   if (stage === 'order-review' || stage === 'budget-region') return 'region';
   if (stage === 'amount-approval') return order.tier === 'region' ? 'region' : 'central';
   return 'central';
+}
+
+function applyApprovalQtyAdjust(state, order, adjustMap) {
+  if (!adjustMap || typeof adjustMap !== 'object') return [];
+  const changes = [];
+  (order.items || []).forEach(function (item) {
+    if (adjustMap[item.id] === undefined) return;
+    const nextQty = Number(adjustMap[item.id]);
+    if (!Number.isSafeInteger(nextQty) || nextQty < 1 || nextQty > 9999) {
+      throw new Error(item.name + ' 调整后的数量须为 1 至 9999 的整数');
+    }
+    if (nextQty !== item.qty) {
+      changes.push(item.name + ' ' + item.qty + '→' + nextQty);
+      item.qty = nextQty;
+    }
+  });
+  if (!changes.length) return [];
+  let sumCents = 0;
+  (order.items || []).forEach(function (item) {
+    sumCents += cents(item.price) * Number(item.qty || 0);
+  });
+  order.total = round2(sumCents / 100);
+  // 重算预算超额与档位
+  const ac = approvalConfigOf(state);
+  const split = splitOrder(order);
+  let overCents = 0;
+  BUDGET.KEYS.forEach(function (k) {
+    if (split[k].total <= 0) return;
+    const usable = storeUsableCents(state, order.store, order.id, k);
+    overCents += Math.max(0, cents(split[k].total) - usable);
+  });
+  order.overAmount = round2(overCents / 100);
+  order.overPending = overCents > 0 && !order.budgetApproved;
+  const activeKeys = BUDGET.KEYS.filter(function (k) { return split[k].total > 0; });
+  const recentCents = ac.splitGuard ? recentStoreCents(state, order.store, ac.splitDays, order.id, activeKeys) : 0;
+  const basisCents = sumCents + recentCents;
+  order.tier = basisCents <= cents(ac.autoMax) ? 'auto' : basisCents <= cents(ac.regionMax) ? 'region' : 'central';
+  return changes;
 }
 
 function approveOrder(state, session, payload) {
@@ -617,6 +1383,11 @@ function approveOrder(state, session, payload) {
   }
   if (permitted === 'region' && order.zone !== session.zone) throw new Error('当前身份仅可审批' + session.zone + '的订单');
 
+  const remark = String(payload.note || payload.reason || '').trim().slice(0, 200);
+  if (!payload.pass && payload.requireReason && remark.length < 2) {
+    throw new Error('请填写至少2个字的驳回原因');
+  }
+
   const original = order.status;
   let who = ({
     'order-review': '战区负责人',
@@ -626,26 +1397,33 @@ function approveOrder(state, session, payload) {
   who = who + '（' + session.id + '，模拟）';
   let note = '';
 
+  const qtyChanges = payload.pass ? applyApprovalQtyAdjust(state, order, payload.adjustQuantities) : [];
+  const ac = approvalConfigOf(state);
+
   if (!payload.pass) {
     // 若此前已核定追加预算（金额审批阶段被驳回），额度要退回机动预算
     const reverted = revertBudgetTransfer(state, order);
     order.status = 'rejected';
     order.overPending = false;
-    note = '审批驳回；演示环境不会发送供应商' + (reverted ? '；退回追加预算 ' + reverted.toFixed(2) + ' 元' : '');
+    if (remark) order.rejectReason = remark;
+    note = (remark ? '驳回原因：' + remark + '；' : '审批驳回；') +
+      '演示环境不会发送供应商' + (reverted ? '；退回追加预算 ' + reverted.toFixed(2) + ' 元' : '');
   } else if (stage === 'order-review') {
     order.regionApproved = true;
     if (order.overPending) {
-      // 战区同意采购，但额度不够：转运营管理部核定（追加机动池 / 门店间调剂）
+      // 战区同意采购，但额度不够：转运营管理部一步核定（追加机动池 / 门店间调剂 + 金额终审）
       order.status = 'budget-central';
       note = '战区审核通过；超出科目额度，转运营管理部核定预算';
     } else if (order.tier === 'auto') {
       order.status = 'supplier';
-      note = '战区审核通过；500元以内免金额审批，直接发送供应商';
+      note = '战区审核通过；≤¥' + fmt.money(ac.autoMax) + ' 免金额审批，直接发送供应商';
+    } else if (order.tier === 'region') {
+      // 优化：500–2000 元预算内订单由战区一步终审（合规 + 金额合并），免去同一人二次点击
+      order.status = 'supplier';
+      note = '战区一步终审通过（含 ¥' + fmt.money(ac.autoMax) + '–' + fmt.money(ac.regionMax) + ' 金额审批），已发送供应商';
     } else {
       order.status = 'amount-approval';
-      note = order.tier === 'region'
-        ? '战区审核通过；500-2000元，转战区金额审批'
-        : '战区审核通过；2000元以上，转运营管理部金额审批';
+      note = '战区审核通过；>¥' + fmt.money(ac.regionMax) + '，转运营管理部金额审批';
     }
   } else if (stage === 'budget-region') {
     order.regionApproved = true;
@@ -664,6 +1442,7 @@ function approveOrder(state, session, payload) {
     const added = applyGapBudget(state, order, gap);
     order.budgetApproved = true;
     order.overPending = false;
+    order.centralApproved = true;
     order.budgetSplit = (function () {
       const s = splitOrder(order);
       const out = {};
@@ -672,13 +1451,18 @@ function approveOrder(state, session, payload) {
       });
       return out;
     })();
-    order.status = order.tier === 'auto' ? 'supplier' : 'amount-approval';
+    // 优化：运营管理部既是预算核定人也是最高金额审批人，一步完成核定并直发供应商
+    order.status = 'supplier';
     note = (added > 0 ? '追加预算（模拟）：' + fmt.money(added) + '元；' : '额度内核定；') +
-      (order.status === 'supplier' ? '免金额审批，待供应商接单' : '继续采购金额审批');
+      '中台一步完成预算核定与金额审批，待供应商接单';
   } else if (stage === 'amount-approval') {
+    order.centralApproved = order.tier === 'central' || order.centralApproved;
     order.status = 'supplier';
     note = order.tier === 'region' ? '战区金额审批通过' : '中台金额审批通过';
   }
+
+  if (qtyChanges.length) note = '调整数量（' + qtyChanges.join('、') + '）；' + note;
+  if (payload.pass && remark) note = note + '；审批意见：' + remark;
 
   const now = new Date().toISOString();
   if (order.status !== original) {
@@ -697,6 +1481,36 @@ function approveOrder(state, session, payload) {
       role: who, from: original, to: order.status, note: note, at: now
     }
   };
+}
+
+// 批量通过当前审批人名下所有「预算内（无缺口）」待审门店单
+function batchApproveOrders(state, session, payload) {
+  if (!session || ['region', 'central'].indexOf(session.role) < 0) {
+    throw new Error('当前身份无批量审批权限');
+  }
+  const p = payload || {};
+  const ids = Array.isArray(p.orderIds) && p.orderIds.length
+    ? p.orderIds
+    : pendingApprovals(state, session)
+        .filter(function (o) { return o.status !== 'dept-approval' && !o.overPending; })
+        .map(function (o) { return o.id; });
+  if (!ids.length) throw new Error('没有符合批量通过条件的预算内待审订单');
+  const audits = [];
+  const orders = [];
+  ids.forEach(function (id) {
+    const o = (state.orders || []).filter(function (x) { return x.id === id; })[0];
+    if (!o || o.status === 'dept-approval' || o.overPending) return;
+    const res = approveOrder(state, session, {
+      orderId: o.id,
+      stage: o.status,
+      pass: true,
+      note: p.note || '批量审批通过'
+    });
+    orders.push(res.order);
+    audits.push(res.audit);
+  });
+  if (!orders.length) throw new Error('没有可批量通过的订单');
+  return { count: orders.length, orders: orders, audits: audits };
 }
 
 /* ------------------------- 撤销 ------------------------- */
@@ -767,6 +1581,7 @@ function closeOrder(state, session, payload) {
   const reason = String(payload.reason || '').trim().slice(0, 120);
   const released = !order.overPending ? Math.round(Number(order.total || 0) * 100) : 0;
   const reverted = revertBudgetTransfer(state, order);
+  const from = order.status;
   order.status = 'cancelled';
   order.overPending = false;
   order.cancelledBy = session.id;
@@ -777,7 +1592,7 @@ function closeOrder(state, session, payload) {
     released: released / 100,
     audit: {
       orderId: order.id, kind: 'cancel', stage: 'cancel', decision: '关闭订单',
-      role: '运营管理部（' + session.id + '，模拟）', from: 'supplier', to: 'cancelled',
+      role: '运营管理部（' + session.id + '，模拟）', from: from, to: 'cancelled',
       note: order.closeReason + '；释放占用金额 ' + (released / 100).toFixed(2) + ' 元' +
         (reverted ? '；退回追加预算 ' + reverted.toFixed(2) + ' 元' : ''),
       at: order.cancelledAt
@@ -803,8 +1618,8 @@ function supplierAck(state, session, payload) {
   if (!session || session.role !== 'supplier' || !session.supplier) throw new Error('请切换为供应商身份');
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
   if (!order) throw new Error('找不到订单，请刷新后重试');
-  if (['order-review', 'cancelled', 'rejected', 'budget-region', 'budget-central', 'amount-approval', 'dept-approval'].indexOf(order.status) >= 0) {
-    throw new Error('订单未正式发出，无法接单');
+  if (['supplier', 'preparing', 'delivering', 'partial'].indexOf(order.status) < 0) {
+    throw new Error('当前订单状态（' + fmt.statusLabel(order.status) + '）不允许接单操作');
   }
   const sub = (order.supplierRecords || {})[session.supplier];
   if (!sub) throw new Error('订单不属于当前测试供应商');
@@ -841,7 +1656,9 @@ function reopenSupplierAck(state, session, payload) {
   if (!session || session.role !== 'supplier' || !session.supplier) throw new Error('请切换为供应商身份');
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
   if (!order) throw new Error('找不到订单，请刷新后重试');
-  if (['cancelled', 'rejected'].indexOf(order.status) >= 0) throw new Error('订单已关闭，无法撤回');
+  if (['supplier', 'preparing', 'delivering', 'partial'].indexOf(order.status) < 0) {
+    throw new Error('当前订单状态（' + fmt.statusLabel(order.status) + '）不允许撤回拒单');
+  }
   const sub = (order.supplierRecords || {})[session.supplier];
   if (!sub) throw new Error('订单不属于当前测试供应商');
   if (sub.status !== 'issue') throw new Error('该订单当前没有待处理的拒单记录');
@@ -872,10 +1689,13 @@ function supplierDeliver(state, session, payload) {
   if (!session || session.role !== 'supplier' || !session.supplier) throw new Error('请切换为供应商身份');
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
   if (!order) throw new Error('找不到订单，请刷新后重试');
+  if (['supplier', 'preparing', 'delivering', 'partial'].indexOf(order.status) < 0) {
+    throw new Error('当前订单状态（' + fmt.statusLabel(order.status) + '）不允许登记发货');
+  }
   const supplier = session.supplier;
   const sub = (order.supplierRecords || {})[supplier];
   if (!sub) throw new Error('该订单不属于当前模拟供应商');
-  if (sub.status !== 'confirmed') throw new Error('请先确认接单，再登记配送');
+  if (['confirmed', 'shipping'].indexOf(sub.status) < 0) throw new Error('请先确认接单，再登记配送');
   if (!Array.isArray(payload.lines) || !payload.lines.length) throw new Error('请选择本次交付的商品');
 
   const shipping = payload.shipping || {};
@@ -1064,10 +1884,13 @@ function acceptDelivery(state, session, payload) {
   } else {
     if (!Array.isArray(order.acceptanceIssues)) order.acceptanceIssues = [];
     order.acceptanceIssues.push({
+      id: 'ISS-' + uid(), status: 'open',
       at: now, by: session.id, byName: session.name, supplier: payload.supplier,
       batchNo: payload.batchNo, note: note, result: 'issue', evidenceId: evidenceId, photoPath: payload.photoPath,
       noPhoto: noPhoto
     });
+    const subRec = (order.supplierRecords || {})[payload.supplier];
+    if (subRec) subRec.hasAcceptanceIssue = true;
   }
   order.stageStartedAt = now;
   return {
@@ -1086,6 +1909,127 @@ function acceptDelivery(state, session, payload) {
   };
 }
 
+function hasOpenAcceptanceIssue(order, supplier) {
+  if (!order || !Array.isArray(order.acceptanceIssues)) return false;
+  return order.acceptanceIssues.some(function (iss) {
+    if (supplier && iss.supplier && iss.supplier !== supplier) return false;
+    return iss.status === 'open' || (!iss.status && !iss.resolvedAt);
+  });
+}
+
+function resolveAcceptanceIssue(state, session, payload) {
+  const p = payload || {};
+  const order = (state.orders || []).filter(function (o) { return o.id === p.orderId; })[0];
+  if (!order) throw new Error('找不到订单');
+  const isSup = session && session.role === 'supplier' && !!(order.supplierRecords || {})[session.supplier];
+  const isCentral = session && session.role === 'central';
+  const isReceiver = canAcceptOrder(order, session);
+  if (!isSup && !isCentral && !isReceiver) throw new Error('无权处理该订单的验收异常');
+
+  const plan = String(p.plan || 'reship');
+  const PLAN_NAME = { reship: '安排补发', discount: '转结算折让', resolved: '协商结案' };
+  if (!PLAN_NAME[plan]) throw new Error('请选择处理方案');
+  const reply = String(p.reply || '').trim();
+  if (reply.length < 2 || reply.length > 300) throw new Error('请填写 2 至 300 字的处理说明');
+
+  const issues = order.acceptanceIssues || [];
+  let target = null;
+  if (p.issueId) target = issues.filter(function (x) { return x.id === p.issueId; })[0];
+  if (!target) {
+    const sup = isSup ? session.supplier : (p.supplier || '');
+    target = issues.filter(function (x) {
+      return (!sup || x.supplier === sup) && (x.status === 'open' || (!x.status && !x.resolvedAt));
+    }).slice(-1)[0];
+  }
+  if (!target) throw new Error('未找到待处理的验收异常记录');
+  if (isSup && target.supplier && target.supplier !== session.supplier) throw new Error('只能处理本供应商名下的异常记录');
+
+  const now = new Date().toISOString();
+  target.id = target.id || ('ISS-' + uid());
+  target.status = 'resolved';
+  target.plan = plan;
+  target.planLabel = PLAN_NAME[plan];
+  target.reply = reply;
+  target.resolvedAt = now;
+  target.resolvedBy = session.name || session.id;
+  target.resolvedRole = session.role;
+
+  const supName = target.supplier;
+  if (supName && order.supplierRecords && order.supplierRecords[supName]) {
+    order.supplierRecords[supName].hasAcceptanceIssue = hasOpenAcceptanceIssue(order, supName);
+  }
+  return {
+    order: order,
+    issue: target,
+    audit: {
+      orderId: order.id, kind: 'accept', stage: 'issue-resolve',
+      decision: '处理验收异常（' + PLAN_NAME[plan] + '）',
+      role: (isSup ? '供应商（' + session.supplier + '）' : session.name + '（' + session.id + '）'),
+      from: order.status, to: order.status,
+      note: '第' + (target.batchNo || 1) + '批异常：' + reply, at: now
+    }
+  };
+}
+
+/* ------------------------- 短收结案（部分到货不再补发时，按已验收数量结案进入结算） ------------------------- */
+function finalizeShortDelivery(state, session, payload) {
+  const order = (state.orders || []).filter(function (o) { return o.id === (payload && payload.orderId); })[0];
+  if (!order) throw new Error('找不到订单');
+  if (['partial', 'delivering', 'delivered'].indexOf(order.status) < 0) {
+    throw new Error('仅部分验收或配送中的订单可办理短收结案');
+  }
+  const canAct = (session && session.role === 'central') || !!settleActorOf(order, session);
+  if (!canAct) throw new Error('请由收货门店/部门或运营管理部办理短收结案');
+  const totalAccepted = (order.items || []).reduce(function (s, x) { return s + Number(x.accepted || 0); }, 0);
+  if (totalAccepted <= 0) throw new Error('尚未验收任何商品，若整单取消请走关闭订单');
+  const reason = String((payload && payload.reason) || '').trim();
+  if (reason.length < 4 || reason.length > 200) throw new Error('请填写4至200字的短收结案原因');
+
+  const now = new Date().toISOString();
+  const shortLines = [];
+  let sumCents = 0;
+  (order.items || []).forEach(function (x) {
+    const acc = Number(x.accepted || 0);
+    if (acc < x.qty) {
+      shortLines.push(x.name + ' ' + x.qty + '→' + acc);
+      x.originalQty = x.originalQty || x.qty;
+      x.qty = acc;
+      x.deliveredQty = acc;
+    }
+    sumCents += cents(x.price) * acc;
+  });
+  if (!shortLines.length) throw new Error('该订单已全部验收，无需短收结案');
+
+  const from = order.status;
+  order.total = round2(sumCents / 100);
+  order.shortClosed = { at: now, by: session.id, byName: session.name, reason: reason, lines: shortLines };
+  order.status = 'settle-pending';
+  order.stageStartedAt = now;
+  order.settlement = order.settlement || {};
+  order.settlement.status = 'pending-store';
+  order.settlement.itemsAmount = acceptedAmountOf(order);
+  order.settlement.readyAt = now;
+
+  Object.keys(order.supplierRecords || {}).forEach(function (sup) {
+    const r = order.supplierRecords[sup];
+    if (!r) return;
+    r.delivered = true;
+    r.status = 'accepted';
+    r.acceptedAt = r.acceptedAt || now;
+  });
+
+  return {
+    order: order,
+    audit: {
+      orderId: order.id, kind: 'accept', stage: 'short-close',
+      decision: '短收结案',
+      role: session.name + '（' + session.id + '）', from: from, to: order.status,
+      note: '按实收数量结案（' + shortLines.join('、') + '）；原因：' + reason,
+      at: now
+    }
+  };
+}
+
 /* ------------------------- 结算金额共同确认 ------------------------- */
 // 按实收数量折算的应结金额（部分验收只算已收部分，未到货不计）
 function acceptedAmountOf(order) {
@@ -1093,6 +2037,46 @@ function acceptedAmountOf(order) {
     return s + cents(Number(x.accepted || 0) * Number(x.price || 0));
   }, 0);
   return round2(total / 100);
+}
+
+function acceptedBySupplierOf(order) {
+  const out = {};
+  (order.items || []).forEach(function (x) {
+    const sup = x.supplier || '未指定供应商';
+    out[sup] = (out[sup] || 0) + cents(Number(x.accepted || 0) * Number(x.price || 0));
+  });
+  Object.keys(out).forEach(function (k) { out[k] = round2(out[k] / 100); });
+  return out;
+}
+
+// 各供应商已确认的实际结算金额（元）；仅在 settlement.status === 'confirmed' 时返回映射
+function settlementBySupplierOf(order) {
+  const out = {};
+  const settle = order && order.settlement;
+  if (!settle || settle.status !== 'confirmed' || !isFinite(Number(settle.amount))) return out;
+  const bySupRaw = acceptedBySupplierOf(order);
+  const sups = Object.keys(bySupRaw);
+  if (settle.bySupplier && typeof settle.bySupplier === 'object') {
+    let covered = true;
+    sups.forEach(function (s) {
+      if (!isFinite(Number(settle.bySupplier[s]))) covered = false;
+      else out[s] = round2(settle.bySupplier[s]);
+    });
+    if (covered && sups.length) return out;
+  }
+  const allAcceptedCents = cents(acceptedAmountOf(order));
+  const targetCents = cents(settle.amount);
+  let allocated = 0;
+  sups.forEach(function (s, idx) {
+    if (idx === sups.length - 1) {
+      out[s] = round2((targetCents - allocated) / 100);
+    } else {
+      const share = allAcceptedCents > 0 ? Math.round(targetCents * (cents(bySupRaw[s]) / allAcceptedCents)) : 0;
+      allocated += share;
+      out[s] = round2(share / 100);
+    }
+  });
+  return out;
 }
 
 // 谁能对这笔单发起结算：门店单看门店；部门单看收货方式（送门店由门店结，送总部由部门结）
@@ -1107,7 +2091,7 @@ function settleActorOf(order, session) {
   return session.role === 'store' && session.stores.indexOf(order.store) >= 0 ? 'store' : null;
 }
 
-// 门店/部门发起：填实际结算金额，允许与「实收数量 × 单价」不同（少发、退款、质量问题折让）
+// 门店/部门发起：填实际结算金额（支持按整单 amount 或分供应商 bySupplier），允许与实收不同
 function submitSettlement(state, session, payload) {
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
   if (!order) throw new Error('找不到这笔订单，请刷新后重试');
@@ -1117,10 +2101,29 @@ function submitSettlement(state, session, payload) {
   const actor = settleActorOf(order, session);
   if (!actor) throw new Error('只有收货方可发起结算确认');
 
-  const amount = round2(Number(payload.amount));
+  const orderSuppliers = [];
+  (order.items || []).forEach(function (x) {
+    if (x.supplier && orderSuppliers.indexOf(x.supplier) < 0) orderSuppliers.push(x.supplier);
+  });
+
+  let bySupplier = null;
+  let amount = 0;
+  if (payload.bySupplier && typeof payload.bySupplier === 'object') {
+    bySupplier = {};
+    let sumCents = 0;
+    orderSuppliers.forEach(function (sup) {
+      const val = round2(Number(payload.bySupplier[sup]));
+      if (!isFinite(val) || val <= 0) throw new Error('「' + sup + '」结算金额需大于 0');
+      bySupplier[sup] = val;
+      sumCents += cents(val);
+    });
+    amount = round2(sumCents / 100);
+  } else {
+    amount = round2(Number(payload.amount));
+  }
   if (!isFinite(amount) || amount <= 0) throw new Error('结算金额需大于 0');
   const cap = cents(Number(order.total || 0)) / 100;
-  if (cents(amount) > Math.round(cap * 100) + 0) throw new Error('结算金额不能超过订单金额 ¥' + fmt.money(cap));
+  if (cents(amount) > Math.round(cap * 100)) throw new Error('结算金额不能超过订单金额 ¥' + fmt.money(cap));
 
   const itemsAmount = acceptedAmountOf(order);
   const diff = round2(amount - itemsAmount);
@@ -1138,12 +2141,15 @@ function submitSettlement(state, session, payload) {
     itemsAmount: itemsAmount,
     diff: diff,
     reason: reason,
+    bySupplier: bySupplier,
     by: session.id,
     byName: session.name,
     byRole: actor,
     round: round,
     submittedAt: now,
     readyAt: (order.settlement && order.settlement.readyAt) || now,
+    suppliers: orderSuppliers,
+    confirmedBySuppliers: {},
     disputes: (order.settlement && order.settlement.disputes) || []
   };
   const from = order.status;
@@ -1162,7 +2168,7 @@ function submitSettlement(state, session, payload) {
   };
 }
 
-// 供应商确认或提出异议；异议退回门店重新核对，双方一致后才进入待对账
+// 供应商确认或提出异议；多供应商订单需所有相关供应商全部确认后才进入待对账
 function settleAction(state, session, payload) {
   if (!session || session.role !== 'supplier') throw new Error('请使用供应商身份确认结算');
   const order = (state.orders || []).filter(function (o) { return o.id === payload.orderId; })[0];
@@ -1179,20 +2185,35 @@ function settleAction(state, session, payload) {
   const from = order.status;
 
   if (payload.action === 'confirm') {
-    settle.status = 'confirmed';
-    settle.confirmedAt = now;
-    settle.confirmedBy = session.id;
-    order.settlement = settle;
-    order.status = 'accepted';
-    order.stageStartedAt = now;
+    const orderSuppliers = [];
+    (order.items || []).forEach(function (x) {
+      if (x.supplier && orderSuppliers.indexOf(x.supplier) < 0) orderSuppliers.push(x.supplier);
+    });
+    if (!settle.confirmedBySuppliers || typeof settle.confirmedBySuppliers !== 'object') {
+      settle.confirmedBySuppliers = {};
+    }
+    settle.confirmedBySuppliers[session.supplier] = { by: session.id, at: now };
     const rec = (order.supplierRecords || {})[session.supplier];
     if (rec) rec.settledAt = now;
+
+    const allConfirmed = orderSuppliers.every(function (sup) {
+      return !!settle.confirmedBySuppliers[sup];
+    });
+    if (allConfirmed) {
+      settle.status = 'confirmed';
+      settle.confirmedAt = now;
+      settle.confirmedBy = session.id;
+      order.status = 'accepted';
+      order.stageStartedAt = now;
+    }
+    order.settlement = settle;
     return {
       order: order,
+      allConfirmed: allConfirmed,
       audit: {
         orderId: order.id, kind: 'settle', stage: 'settle-confirm', decision: '供应商确认结算',
         role: '供应商（' + session.supplier + '）', from: from, to: order.status,
-        note: '确认结算金额 ¥' + fmt.money(settle.amount), at: now
+        note: '确认结算金额 ¥' + fmt.money(settle.amount) + (allConfirmed ? '' : '（等待其余供应商确认）'), at: now
       }
     };
   }
@@ -1217,15 +2238,11 @@ function settleAction(state, session, payload) {
 }
 
 /* ------------------------- 对账 ------------------------- */
-function createReconciliation(state, session, payload) {
-  if (!session || session.role !== 'central') throw new Error('仅运营管理部可生成对账单');
-  const supplier = String(payload.supplier || '').trim();
-  const period = String(payload.period || '').trim();
-  if (!supplier) throw new Error('请先选择一家供应商');
-  if (!period || period.length > 80) throw new Error('请输入对账周期');
+function collectPendingReconLines(state, supplier) {
   const lines = [];
   state.orders.forEach(function (o) {
-    // 结算金额尚未经双方确认的订单，暂不纳入对账
+    // 只有已完成验收且结算金额经双方确认（状态为 accepted / done）的订单才可纳入对账
+    if (['accepted', 'done'].indexOf(o.status) < 0) return;
     if (o.settlement && o.settlement.status !== 'confirmed') return;
     const own = [];
     (o.items || []).forEach(function (item) {
@@ -1240,24 +2257,31 @@ function createReconciliation(state, session, payload) {
       }
     });
     if (!own.length) return;
-    // 已共同确认的结算金额按确认值入账；与「实收 × 单价」的差额单列一行，保证对账合计 = 结算金额
-    const settle = o.settlement && o.settlement.status === 'confirmed' ? o.settlement : null;
-    if (settle) {
+    // 已共同确认的结算金额按确认值入账；优先取分供应商专属结算额
+    const settleMap = settlementBySupplierOf(o);
+    if (settleMap[supplier] !== undefined) {
       const lineSum = own.reduce(function (s, x) { return s + Math.round(x.amount * 100); }, 0) / 100;
-      // 一张单可能含多家供应商：按本供应商已验收金额占比分摊整单结算金额
-      const allAccepted = acceptedAmountOf(o);
-      const share = allAccepted > 0 ? Math.min(1, lineSum / allAccepted) : 1;
-      const target = Math.round(settle.amount * share * 100) / 100;
+      const target = settleMap[supplier];
       const gap = Math.round((target - lineSum) * 100) / 100;
       if (Math.round(gap * 100) !== 0) {
         own.push({
           order: o.id, store: o.store, supplier: supplier, name: '结算差异调整',
-          id: '', n: 0, price: 0, amount: gap, adjust: true, reason: settle.reason || ''
+          id: '', n: 0, price: 0, amount: gap, adjust: true, reason: (o.settlement && o.settlement.reason) || ''
         });
       }
     }
     lines.push.apply(lines, own);
   });
+  return lines;
+}
+
+function createReconciliation(state, session, payload) {
+  if (!session || session.role !== 'central') throw new Error('仅运营管理部可生成对账单');
+  const supplier = String(payload.supplier || '').trim();
+  const period = String(payload.period || '').trim();
+  if (!supplier) throw new Error('请先选择一家供应商');
+  if (!period || period.length > 80) throw new Error('请输入对账周期');
+  const lines = collectPendingReconLines(state, supplier);
   if (!lines.length) throw new Error('该供应商没有待对账的已验收明细');
   const existing = (state.recons || []).map(function (r) {
     const m = String(r.id || '').match(/^DZ-(\d+)$/);
@@ -1267,7 +2291,7 @@ function createReconciliation(state, session, payload) {
   const id = 'DZ-' + String(num).padStart(3, '0');
   const total = Math.round(lines.reduce(function (sum, x) { return sum + Math.round(x.amount * 100); }, 0)) / 100;
   const now = new Date().toISOString();
-  const rec = { id: id, supplier: supplier, period: period, lines: lines, total: total, status: 'supplier-pending', createdAt: now, createdBy: session.id };
+  const rec = { id: id, supplier: supplier, period: period, lines: lines, total: total, status: 'supplier-pending', round: 1, createdAt: now, createdBy: session.id };
   if (!Array.isArray(state.recons)) state.recons = [];
   state.recons.unshift(rec);
   lines.forEach(function (line) {
@@ -1283,18 +2307,22 @@ function reconAction(state, session, payload) {
   const id = String(payload.reconId || '');
   const action = String(payload.action || '');
   if (!/^DZ-[0-9]{3,10}$/.test(id)) throw new Error('对账单编号不正确');
-  if (['confirm', 'dispute', 'lock'].indexOf(action) < 0) throw new Error('不支持的操作');
+  if (['confirm', 'dispute', 'lock', 'reopen', 'void'].indexOf(action) < 0) throw new Error('不支持的操作');
   const note = String(payload.note || '').trim();
   if (action === 'dispute' && (note.length < 2 || note.length > 300)) throw new Error('请输入2至300字的差异原因');
-  if (action === 'lock' && (!session || session.role !== 'central')) throw new Error('仅运营管理部可锁定对账单');
-  if (action !== 'lock' && (!session || session.role !== 'supplier')) throw new Error('请使用供应商身份确认对账');
+  const isCentralAct = ['lock', 'reopen', 'void'].indexOf(action) >= 0;
+  if (isCentralAct && (!session || session.role !== 'central')) throw new Error('仅运营管理部可执行此对账操作');
+  if (!isCentralAct && (!session || session.role !== 'supplier')) throw new Error('请使用供应商身份确认对账');
 
   const rec = (state.recons || []).filter(function (x) { return x.id === id; })[0];
   if (!rec) throw new Error('找不到对账单');
-  if (action !== 'lock' && rec.supplier !== session.supplier) throw new Error('不能处理其他供应商的对账单');
+  if (!isCentralAct && rec.supplier !== session.supplier) throw new Error('不能处理其他供应商的对账单');
   if (action === 'lock' && rec.status !== 'supplier-confirmed') throw new Error('必须由供应商先确认对账单');
-  if (action !== 'lock' && rec.status !== 'supplier-pending') throw new Error('对账单当前不能重复确认或提出差异');
+  if (!isCentralAct && rec.status !== 'supplier-pending') throw new Error('对账单当前不能重复确认或提出差异');
+  if (action === 'reopen' && rec.status !== 'disputed') throw new Error('仅存在差异的对账单可重新发起');
+  if (action === 'void' && ['disputed', 'supplier-pending'].indexOf(rec.status) < 0) throw new Error('仅未确认或有差异的对账单可作废');
   const now = new Date().toISOString();
+  const prevStatus = rec.status;
 
   if (action === 'dispute') {
     rec.status = 'disputed';
@@ -1306,6 +2334,40 @@ function reconAction(state, session, payload) {
       const item = order ? order.items.filter(function (x) { return x.id === line.id; })[0] : null;
       if (!item || Number(item.reconPending || 0) < line.n) throw new Error('对账暂占数据不一致');
       item.reconPending -= line.n;
+    });
+  } else if (action === 'void') {
+    if (prevStatus === 'supplier-pending') {
+      rec.lines.forEach(function (line) {
+        if (!line.id) return;
+        const order = state.orders.filter(function (o) { return o.id === line.order; })[0];
+        const item = order ? order.items.filter(function (x) { return x.id === line.id; })[0] : null;
+        if (item && Number(item.reconPending || 0) >= line.n) item.reconPending -= line.n;
+      });
+    }
+    rec.status = 'voided';
+    rec.voidedAt = now;
+    rec.voidedBy = session.id;
+    rec.voidReason = note || '核查差异后作废';
+  } else if (action === 'reopen') {
+    const freshLines = collectPendingReconLines(state, rec.supplier);
+    if (!freshLines.length) throw new Error('该供应商当前没有可对账的明细，若不再对账请点击「作废」');
+    if (rec.disputeNote) {
+      rec.disputeHistory = rec.disputeHistory || [];
+      rec.disputeHistory.push({ note: rec.disputeNote, at: rec.disputedAt, round: rec.round || 1 });
+    }
+    rec.lines = freshLines;
+    rec.total = Math.round(freshLines.reduce(function (sum, x) { return sum + Math.round(x.amount * 100); }, 0)) / 100;
+    rec.round = (rec.round || 1) + 1;
+    rec.status = 'supplier-pending';
+    rec.reopenedAt = now;
+    rec.reopenedBy = session.id;
+    rec.reopenNote = note || '核对调整后重发对账';
+    rec.disputeNote = '';
+    freshLines.forEach(function (line) {
+      if (!line.id) return;
+      const order = state.orders.filter(function (o) { return o.id === line.order; })[0];
+      const item = order && order.items.filter(function (x) { return x.id === line.id; })[0];
+      if (item) item.reconPending = Number(item.reconPending || 0) + line.n;
     });
   } else if (action === 'confirm') {
     rec.status = 'supplier-confirmed';
@@ -1378,7 +2440,91 @@ function slaForOrder(state, orderId) {
   return rows.sort(function (a, b) { return b.hours - a.hours; })[0];
 }
 
-/* ------------------------- 统计 ------------------------- */
+/* ------------------------- 统计（对齐最终结算金额口径 + 合同×预算科目总表） ------------------------- */
+// 按「已共同确认的最终结算金额」分摊每条明细的有效已验收与已对账金额（元），保证统计看板与对账单分毫不差
+function effectiveOrderLineAmounts(order) {
+  const items = order.items || [];
+  const settleMap = settlementBySupplierOf(order);
+  const bySup = {};
+  items.forEach(function (line, idx) {
+    const sup = line.supplier || '未指定供应商';
+    if (!bySup[sup]) bySup[sup] = { rows: [], rawAccCents: 0, accUnits: 0, recUnits: 0 };
+    const price = Number(line.price || 0);
+    const accQty = Number(line.accepted || 0);
+    const recQty = Number(line.reconciled || 0);
+    const reqCents = cents(Number(line.qty || 0) * price);
+    const accCents = cents(accQty * price);
+    const recCents = cents(recQty * price);
+    bySup[sup].rows.push({ idx: idx, line: line, sup: sup, reqCents: reqCents, accCents: accCents, recCents: recCents });
+    bySup[sup].rawAccCents += accCents;
+    bySup[sup].accUnits += accQty;
+    bySup[sup].recUnits += recQty;
+  });
+
+  const result = new Array(items.length);
+  Object.keys(bySup).forEach(function (sup) {
+    const grp = bySup[sup];
+    const hasSettled = settleMap[sup] !== undefined;
+    const settledCents = hasSettled ? cents(settleMap[sup]) : grp.rawAccCents;
+    const allRec = grp.accUnits > 0 && grp.recUnits === grp.accUnits;
+    const targetRecCents = hasSettled
+      ? (allRec ? settledCents : (grp.rawAccCents > 0 ? Math.round(settledCents * grp.rows.reduce(function (s, r) { return s + r.recCents; }, 0) / grp.rawAccCents) : 0))
+      : grp.rows.reduce(function (s, r) { return s + r.recCents; }, 0);
+
+    let accAlloc = 0;
+    let recAlloc = 0;
+    const activeAccRows = grp.rows.filter(function (r) { return r.accCents > 0; });
+    const lastAccIdx = activeAccRows.length ? activeAccRows[activeAccRows.length - 1].idx : -1;
+    const activeRecRows = grp.rows.filter(function (r) { return r.recCents > 0; });
+    const lastRecIdx = activeRecRows.length ? activeRecRows[activeRecRows.length - 1].idx : -1;
+
+    grp.rows.forEach(function (r) {
+      const p = CATALOG_BY_ID[r.line.id];
+      const key = BUDGET.itemOf(r.line.budgetItem ? r.line : (p || r.line));
+      let effAcc = r.accCents;
+      if (hasSettled) {
+        if (r.idx === lastAccIdx) effAcc = Math.max(0, settledCents - accAlloc);
+        else if (r.accCents > 0 && grp.rawAccCents > 0) {
+          effAcc = Math.round(settledCents * (r.accCents / grp.rawAccCents));
+          accAlloc += effAcc;
+        } else effAcc = 0;
+      }
+      let effRec = r.recCents;
+      if (hasSettled) {
+        const sumRawRec = grp.rows.reduce(function (s, x) { return s + x.recCents; }, 0);
+        if (r.idx === lastRecIdx) effRec = Math.max(0, targetRecCents - recAlloc);
+        else if (r.recCents > 0 && sumRawRec > 0) {
+          effRec = Math.round(targetRecCents * (r.recCents / sumRawRec));
+          recAlloc += effRec;
+        } else effRec = 0;
+      }
+      result[r.idx] = {
+        supplier: sup,
+        budgetKey: key,
+        requested: round2(r.reqCents / 100),
+        accepted: round2(effAcc / 100),
+        reconciled: round2(effRec / 100)
+      };
+    });
+  });
+  return result;
+}
+
+function effectiveOrderAmounts(order) {
+  const lines = effectiveOrderLineAmounts(order);
+  let acc = 0, rec = 0;
+  lines.forEach(function (l) {
+    if (!l) return;
+    acc += cents(l.accepted);
+    rec += cents(l.reconciled);
+  });
+  return {
+    requested: round2(Number(order.total || 0)),
+    accepted: round2(acc / 100),
+    reconciled: round2(rec / 100)
+  };
+}
+
 function reportSummary(state) {
   const valid = (state.orders || []).filter(function (o) { return ['rejected', 'cancelled'].indexOf(o.status) < 0; });
   const totals = { requests: (state.orders || []).length, activeOrders: valid.length, requested: 0, accepted: 0, reconciled: 0, unreconciledAccepted: 0 };
@@ -1394,26 +2540,24 @@ function reportSummary(state) {
     add(byZone, zone, 'requested', Number(order.total || 0));
     totals.requested += Number(order.total || 0);
     const seen = {};
-    (order.items || []).forEach(function (line) {
-      const supplier = line.supplier || '未指定供应商';
-      const price = Number(line.price || 0);
-      const accepted = Number(line.accepted || 0) * price;
-      const reconciled = Number(line.reconciled || 0) * price;
+    const effLines = effectiveOrderLineAmounts(order);
+    (order.items || []).forEach(function (line, idx) {
+      const eff = effLines[idx] || { supplier: line.supplier || '未指定供应商', requested: 0, accepted: 0, reconciled: 0 };
+      const supplier = eff.supplier;
       if (!seen[supplier]) { add(bySupplier, supplier, 'orders', 1); seen[supplier] = 1; }
-      add(bySupplier, supplier, 'requested', Number(line.qty || 0) * price);
-      add(bySupplier, supplier, 'accepted', accepted);
-      add(bySupplier, supplier, 'reconciled', reconciled);
-      add(byZone, zone, 'accepted', accepted);
-      add(byZone, zone, 'reconciled', reconciled);
-      totals.accepted += accepted;
-      totals.reconciled += reconciled;
+      add(bySupplier, supplier, 'requested', eff.requested);
+      add(bySupplier, supplier, 'accepted', eff.accepted);
+      add(bySupplier, supplier, 'reconciled', eff.reconciled);
+      add(byZone, zone, 'accepted', eff.accepted);
+      add(byZone, zone, 'reconciled', eff.reconciled);
+      totals.accepted += eff.accepted;
+      totals.reconciled += eff.reconciled;
     });
   });
   totals.unreconciledAccepted = Math.max(0, totals.accepted - totals.reconciled);
   Object.keys(totals).forEach(function (k) {
     if (!Number.isInteger(totals[k])) totals[k] = Math.round(totals[k] * 100) / 100;
   });
-  ['byZone', 'bySupplier'].forEach(function () {});
   return {
     totals: totals,
     byZone: Object.keys(byZone).map(function (k) {
@@ -1438,17 +2582,98 @@ function departmentSummary(state) {
     if (o.purchaseType !== 'department' || ['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
     const row = index[o.department];
     if (!row) return;
+    const eff = effectiveOrderAmounts(o);
     row.orders += 1;
-    row.requested += Number(o.total || 0);
-    (o.items || []).forEach(function (p) {
-      row.accepted += Number(p.accepted || 0) * Number(p.price || 0);
-      row.reconciled += Number(p.reconciled || 0) * Number(p.price || 0);
-    });
+    row.requested += eff.requested;
+    row.accepted += eff.accepted;
+    row.reconciled += eff.reconciled;
   });
   rows.forEach(function (r) {
     ['requested', 'accepted', 'reconciled'].forEach(function (k) { r[k] = Math.round(r[k] * 100) / 100; });
   });
   return rows;
+}
+
+// 2 份框架合同 × 3 大预算科目 财务核算汇总表
+function contractBudgetReport(state) {
+  const summaries = contractSummary(state);
+  const storeRows = budgetSummary(state, { role: 'central', stores: [] });
+  const effByContract = {};
+  const effByBudget = {};
+  BUDGET.KEYS.forEach(function (k) {
+    effByBudget[k] = { storeAccepted: 0, storeReconciled: 0, deptRequested: 0, deptAccepted: 0, deptReconciled: 0 };
+  });
+
+  (state.orders || []).forEach(function (o) {
+    if (['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
+    const effLines = effectiveOrderLineAmounts(o);
+    (o.items || []).forEach(function (line, idx) {
+      const eff = effLines[idx];
+      if (!eff) return;
+      const sup = eff.supplier;
+      if (!effByContract[sup]) effByContract[sup] = { accepted: 0, reconciled: 0 };
+      effByContract[sup].accepted += cents(eff.accepted);
+      effByContract[sup].reconciled += cents(eff.reconciled);
+
+      const b = effByBudget[eff.budgetKey];
+      if (!b) return;
+      if (o.purchaseType === 'department') {
+        b.deptRequested += cents(eff.requested);
+        b.deptAccepted += cents(eff.accepted);
+        b.deptReconciled += cents(eff.reconciled);
+      } else {
+        b.storeAccepted += cents(eff.accepted);
+        b.storeReconciled += cents(eff.reconciled);
+      }
+    });
+  });
+
+  const contracts = summaries.map(function (c) {
+    const ec = effByContract[c.supplier] || { accepted: 0, reconciled: 0 };
+    const accepted = round2(ec.accepted / 100);
+    const reconciled = round2(ec.reconciled / 100);
+    return Object.assign({}, c, {
+      accepted: accepted,
+      reconciled: reconciled,
+      inTransit: round2(Math.max(0, c.used - accepted))
+    });
+  });
+
+  const budgetItems = BUDGET.ITEMS.map(function (meta) {
+    const key = meta.key;
+    let storeBudget = 0, baseUsed = 0, storeOccupied = 0, storeSpent = 0, storeUsed = 0, storeAvailable = 0;
+    storeRows.forEach(function (sr) {
+      const it = (sr.items || []).filter(function (x) { return x.key === key; })[0];
+      if (!it) return;
+      storeBudget += cents(it.budget);
+      baseUsed += cents(it.baseUsed);
+      storeOccupied += cents(it.occupied);
+      storeSpent += cents(it.spent);
+      storeUsed += cents(it.used);
+      storeAvailable += cents(it.available);
+    });
+    const b = effByBudget[key] || { storeAccepted: 0, storeReconciled: 0, deptRequested: 0, deptAccepted: 0, deptReconciled: 0 };
+    const deptReq = round2(b.deptRequested / 100);
+    return {
+      key: key,
+      name: meta.name,
+      short: meta.short,
+      contract: meta.contract,
+      storeBudget: round2(storeBudget / 100),
+      baseUsed: round2(baseUsed / 100),
+      storeInTransit: round2(storeOccupied / 100),
+      storeAccepted: round2(b.storeAccepted / 100),
+      storeReconciled: round2(b.storeReconciled / 100),
+      storeUsed: round2(storeUsed / 100),
+      storeAvailable: round2(storeAvailable / 100),
+      deptRequested: deptReq,
+      deptAccepted: round2(b.deptAccepted / 100),
+      deptReconciled: round2(b.deptReconciled / 100),
+      totalUsed: round2((storeUsed + b.deptRequested) / 100)
+    };
+  });
+
+  return { contracts: contracts, budgetItems: budgetItems };
 }
 
 /* ------------------------- 预算占用 ------------------------- */
@@ -1548,6 +2773,7 @@ function budgetSummary(state, session) {
 // 按历史下单数量排序，为新单提供"一键复购"入口，不额外存储
 function frequentItems(state, session, limit) {
   if (!session || ['store', 'department', 'central'].indexOf(session.role) < 0) return [];
+  const catMap = catalogMapOf(state);
   const counts = {};
   (state.orders || []).forEach(function (o) {
     if (['rejected', 'cancelled'].indexOf(o.status) >= 0) return;
@@ -1556,7 +2782,8 @@ function frequentItems(state, session, limit) {
       : (o.purchaseType === 'department' && o.department === session.department);
     if (!mine) return;
     (o.items || []).forEach(function (x) {
-      if (!CATALOG_BY_ID[x.id]) return;
+      const p = catMap[x.id];
+      if (!p || p.deleted || p.enabled === false) return;
       counts[x.id] = (counts[x.id] || 0) + Number(x.qty || 0);
     });
   });
@@ -1564,7 +2791,7 @@ function frequentItems(state, session, limit) {
     .sort(function (a, b) { return counts[b] - counts[a]; })
     .slice(0, limit || 6)
     .map(function (id) {
-      const p = CATALOG_BY_ID[id];
+      const p = catMap[id];
       return { id: id, name: p.name, spec: p.spec || '', unit: p.unit || '', price: p.price, times: counts[id] };
     });
 }
@@ -1632,12 +2859,16 @@ function pendingApprovals(state, session) {
   return [];
 }
 
-// 待确认结算：门店/部门待提交金额，供应商待确认金额
+// 待确认结算：门店/部门待提交金额，供应商待确认金额（多供应商订单仅展示尚未确认的供应商）
 function pendingSettleOrders(state, session) {
   if (!session) return [];
   const list = visibleOrders(state, session);
   if (session.role === 'supplier') {
-    return list.filter(function (o) { return o.status === 'settle-supplier'; });
+    return list.filter(function (o) {
+      if (o.status !== 'settle-supplier') return false;
+      const c = o.settlement && o.settlement.confirmedBySuppliers;
+      return !(c && c[session.supplier]);
+    });
   }
   return list.filter(function (o) {
     return ['settle-pending', 'settle-disputed'].indexOf(o.status) >= 0 && !!settleActorOf(o, session);
@@ -1665,10 +2896,14 @@ function actionCount(state, session) {
 
 module.exports = {
   CATALOG_BY_ID, SHIPPING_METHODS, INSTALL_REQUIRED, STORES,
+  catalogOf, catalogMapOf, suppliersOf, normalizeScope, canActorBuyItem, saveCatalogItem, toggleCatalogItem, setCatalogItemScope, deleteCatalogItem, restoreCatalogItem,
+  approvalConfigOf, saveApprovalConfig, recentStoreCents,
+  contractsOf, contractSummary, saveContract, computeDepartmentQuote,
   computeQuote, createStoreOrder, createDepartmentOrders, approveDepartmentGroup,
-  approveOrder, cancelOrder, closeOrder, supplierAck, reopenSupplierAck, supplierDeliver, batchAvailability, acceptDelivery,
-  acceptedAmountOf, settleActorOf, submitSettlement, settleAction, pendingSettleOrders,
-  createReconciliation, reconAction, slaEntries, slaForOrder, reportSummary, departmentSummary,
+  approveOrder, batchApproveOrders, cancelOrder, closeOrder, supplierAck, reopenSupplierAck, supplierDeliver,
+  batchAvailability, acceptDelivery, hasOpenAcceptanceIssue, resolveAcceptanceIssue, finalizeShortDelivery,
+  acceptedAmountOf, acceptedBySupplierOf, settlementBySupplierOf, settleActorOf, submitSettlement, settleAction, pendingSettleOrders,
+  createReconciliation, reconAction, slaEntries, slaForOrder, effectiveOrderAmounts, reportSummary, departmentSummary, contractBudgetReport,
   budgetSummary, budgetGap, adjustFlex, transferStoreBudget, storeUsableCents, frequentItems,
   saveBudgetConfig, budgetConfigOf, storeBudgetRows, splitOrder, applyGapBudget, revertBudgetTransfer,
   visibleOrders, pendingAcceptOrders, canAcceptOrder,

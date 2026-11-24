@@ -61,20 +61,6 @@
       <view class="goods-inner {{canBuy ? 'has-bar' : ''}}">
         <view id="g-top"></view>
 
-        <view class="freq" wx:if="{{frequent.length && activeCat === 'all' && !keyword}}">
-          <view class="freq-head">
-            <text class="freq-title">常买清单</text>
-            <text class="freq-note">按历史下单排序，点一下加 1 件</text>
-          </view>
-          <scroll-view scroll-x class="freq-scroll">
-            <view class="freq-card" wx:for="{{frequent}}" wx:key="id" data-id="{{item.id}}" bindtap="addItem">
-              <view class="freq-name">{{item.name}}</view>
-              <view class="freq-price">¥{{item.priceText}}<text class="freq-unit">/{{item.unit}}</text></view>
-              <view class="freq-add {{item.qty ? 'on' : ''}}">{{item.qty ? '已选 ' + item.qty + ' · 再加' : '＋ 加入'}}</view>
-            </view>
-          </scroll-view>
-        </view>
-
         <view class="list-head">
           <view class="lh-left">
             <text class="list-title">{{listTitle}}</text>

@@ -106,11 +106,15 @@ view, text, input, textarea, picker, button { box-sizing: border-box; }
 .pill.gray { background: #eef1f5; color: #6c7d92; }
 .pill.dark { background: #e7edf6; color: #24456b; }
 .pill.info { background: #eaf3fd; color: #1f5d96; }
+.pill.teal { background: #e3f5f1; color: #0f6e5e; }
+.pill.violet { background: #f1ecfb; color: #6a4fa3; }
 
 /* 卡片左侧状态色条：用于订单/审批/供应商列表快速扫读 */
 .accent { border-left: 6rpx solid transparent; }
 .accent-warn { border-left-color: #e3b566; }
 .accent-info { border-left-color: #6d9fd0; }
+.accent-teal { border-left-color: #2ea38c; }
+.accent-violet { border-left-color: #8c6fd1; }
 .accent-good { border-left-color: #55aa8b; }
 .accent-bad { border-left-color: #d98b83; }
 .accent-dark { border-left-color: #8ea9c6; }
