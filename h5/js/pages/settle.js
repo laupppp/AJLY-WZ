@@ -29,11 +29,17 @@
         return;
       }
 
+      const bySupAccepted = domain.acceptedBySupplierOf(order);
+      const supKeys = Object.keys(bySupAccepted);
+      const isMultiSup = supKeys.length > 1;
+
       const itemsAmount = domain.acceptedAmountOf(order);
       const isStoreSide = !!domain.settleActorOf(order, me);
       const isSupplierSide = me.role === 'supplier' && (order.items || []).some(function (x) {
         return x.supplier === me.supplier;
       });
+      const confirmedMap = (order.settlement && order.settlement.confirmedBySuppliers) || {};
+      const myConfirmed = isSupplierSide && !!confirmedMap[me.supplier];
       const editable = isStoreSide && ['settle-pending', 'settle-disputed'].indexOf(order.status) >= 0;
 
       const raw = order.settlement || {};
@@ -64,6 +70,8 @@
         submittedAt: order.settlement.submittedAt ? BIZ.fmt.fullTime(order.settlement.submittedAt) : '',
         confirmedAt: order.settlement.confirmedAt ? BIZ.fmt.fullTime(order.settlement.confirmedAt) : '',
         round: order.settlement.round || 1,
+        suppliers: Array.isArray(order.settlement.suppliers) ? order.settlement.suppliers : [],
+        confirmedMap: confirmedMap,
         disputes: (order.settlement.disputes || []).map(function (d) {
           return { by: d.supplier || d.by, reason: d.reason, at: BIZ.fmt.fullTime(d.at) };
         })
@@ -74,6 +82,19 @@
         : (order.store || '');
       const finishedAt = (order.acceptances && order.acceptances.length)
         ? BIZ.fmt.fullTime(order.acceptances[order.acceptances.length - 1].at) : '';
+
+      const evPhotos = Store.listEvidence(order.id).filter(function (ev) { return ev && ev.filePath; });
+      const evStripHtml = evPhotos.length
+        ? '<div class="divider"></div>' +
+          '<div class="tiny muted mb4">现场验收照片（点击放大查看）</div>' +
+          '<div class="ev-row">' + evPhotos.map(function (ev) {
+            const label = '第 ' + (ev.batchNo || 1) + ' 批' + (ev.result === 'issue' ? '异常' : '验收') + '照片';
+            return '<button class="ev-thumb-btn" type="button" data-preview-src="' + UI.esc(ev.filePath) + '" data-preview-title="' + UI.esc(label) + '">' +
+              '<img class="ev-thumb" src="' + UI.esc(ev.filePath) + '" alt="验收照片">' +
+              '<span class="ev-cap">' + UI.esc(label) + '</span>' +
+            '</button>';
+          }).join('') + '</div>'
+        : '';
 
       root.innerHTML =
         '<div class="detail-hero">' +
@@ -101,14 +122,24 @@
           '<div class="divider"></div>' +
           '<div class="between"><span class="small">实收核算金额</span>' +
             '<span class="money" style="font-size:17px">¥' + UI.money(itemsAmount) + '</span></div>' +
+          evStripHtml +
         '</div>' +
 
         (isStoreSide && editable
           ? '<div class="card card-pad mt12">' +
               '<div class="section-title mb8">填写结算金额</div>' +
-              '<div class="small muted" style="margin:-4px 0 12px">与实收核算不一致时需说明原因</div>' +
-              '<div class="inline-input big"><span class="c">¥</span>' +
-                '<input id="st-amount" type="number" min="0" step="0.01" value="' + initialAmount + '" placeholder="0.00"></div>' +
+              '<div class="small muted" style="margin:-4px 0 12px">' + (isMultiSup ? '本单涉及多家供应商/合同，可分别填写各自实际结算金额' : '与实收核算不一致时需说明原因') + '</div>' +
+              (isMultiSup
+                ? supKeys.map(function (sup) {
+                    const prevVal = (raw.bySupplier && isFinite(Number(raw.bySupplier[sup]))) ? Number(raw.bySupplier[sup]) : bySupAccepted[sup];
+                    return '<div class="field"><div class="label">' + UI.esc(sup) + '（实收 ¥' + UI.money(bySupAccepted[sup]) + '）<span class="req">*</span></div>' +
+                      '<div class="inline-input"><span class="c">¥</span>' +
+                      '<input class="sup-amt-input" data-sup-amt="' + UI.esc(sup) + '" type="number" min="0.01" step="0.01" value="' + prevVal + '"></div></div>';
+                  }).join('') +
+                  '<div class="kv"><span class="k">合计结算</span><span class="v money" id="st-multi-total">¥' + UI.money(initialAmount) + '</span></div>' +
+                  '<input id="st-amount" type="hidden" value="' + initialAmount + '">'
+                : '<div class="inline-input big"><span class="c">¥</span>' +
+                  '<input id="st-amount" type="number" min="0" step="0.01" value="' + initialAmount + '" placeholder="0.00"></div>') +
               '<div class="diff-line ok" id="st-diff">与实收核算一致</div>' +
               '<div class="field mt8" id="st-reason-wrap" style="display:none">' +
                 '<div class="label">差异原因<span class="req">*</span></div>' +
@@ -128,15 +159,17 @@
               (settle && settle.reason ? '<div class="kv"><span class="k">差异原因</span><span class="v">' + UI.esc(settle.reason) + '</span></div>' : '') +
               '<div class="kv"><span class="k">门店</span><span class="v">' + UI.esc(settle ? settle.byName : '') + '</span></div>' +
               '<div class="kv"><span class="k">提交时间</span><span class="v">' + UI.esc(settle ? settle.submittedAt : '') + '</span></div>' +
-              '<div class="btn-group mt12">' +
-                '<button class="btn ghost" id="st-dispute-toggle">提出异议</button>' +
-                '<button class="btn primary" id="st-confirm">确认金额</button>' +
-              '</div>' +
-              '<div class="field mt12" id="st-dispute-wrap" style="display:none">' +
-                '<div class="label">异议说明<span class="req">*</span></div>' +
-                '<input class="input" id="st-dispute-reason" maxlength="200" placeholder="如：折让金额过低，应为 115 元（至少 4 个字）">' +
-                '<button class="btn ghost block mt8" id="st-dispute">提交异议，退回门店</button>' +
-              '</div>' +
+              (myConfirmed
+                ? '<div class="note-box mt12">您已确认本单结算金额，等待其他供应商确认。</div>'
+                : '<div class="btn-group mt12">' +
+                    '<button class="btn ghost" id="st-dispute-toggle">提出异议</button>' +
+                    '<button class="btn primary" id="st-confirm">确认金额</button>' +
+                  '</div>' +
+                  '<div class="field mt12" id="st-dispute-wrap" style="display:none">' +
+                    '<div class="label">异议说明<span class="req">*</span></div>' +
+                    '<input class="input" id="st-dispute-reason" maxlength="200" placeholder="如：折让金额过低，应为 115 元（至少 4 个字）">' +
+                    '<button class="btn ghost block mt8" id="st-dispute">提交异议，退回门店</button>' +
+                  '</div>') +
             '</div>'
           : '') +
 
@@ -151,6 +184,16 @@
               (settle.reason ? '<div class="kv"><span class="k">差异原因</span><span class="v">' + UI.esc(settle.reason) + '</span></div>' : '') +
               '<div class="kv"><span class="k">门店提交</span><span class="v">' + UI.esc(settle.byName) + (settle.submittedAt ? ' · ' + UI.esc(settle.submittedAt) : '') + '</span></div>' +
               (settle.confirmedAt ? '<div class="kv"><span class="k">供应商确认</span><span class="v">' + UI.esc(settle.confirmedAt) + '</span></div>' : '') +
+              (settle.suppliers.length > 1
+                ? '<div class="mt8" style="padding-top:8px;border-top:1px dashed var(--line-2)">' +
+                    '<div class="tiny muted mb4">多供应商确认进度</div>' +
+                    settle.suppliers.map(function (sup) {
+                      const ok = !!settle.confirmedMap[sup];
+                      return '<div class="kv"><span class="k">' + UI.esc(sup) + '</span>' +
+                        '<span class="v"><span class="pill ' + (ok ? 'good' : 'warn') + '">' + (ok ? '已确认' : '待确认') + '</span></span></div>';
+                    }).join('') +
+                  '</div>'
+                : '') +
               settle.disputes.map(function (d) {
                 return '<div class="rec-block" style="border-color:#f6d9d4;background:#fffaf9">' +
                   '<div class="between"><span class="strong" style="color:var(--bad)">供应商异议 · ' + UI.esc(d.by || '') + '</span>' +
@@ -178,7 +221,25 @@
       const diffLine = root.querySelector('#st-diff');
       const hint = root.querySelector('#st-hint');
 
+      function readSupMap() {
+        const supInputs = root.querySelectorAll('[data-sup-amt]');
+        if (!supInputs.length) return null;
+        const map = {};
+        let sum = 0;
+        supInputs.forEach(function (inp) {
+          const val = Number(inp.value);
+          map[inp.dataset.supAmt] = val;
+          if (isFinite(val)) sum += Math.round(val * 100);
+        });
+        const total = Math.round(sum) / 100;
+        if (amountInput) amountInput.value = total;
+        const totalLabel = root.querySelector('#st-multi-total');
+        if (totalLabel) totalLabel.textContent = '¥' + UI.money(total);
+        return map;
+      }
+
       function checkDiff() {
+        const supMap = readSupMap();
         if (!amountInput) return;
         const amount = Number(amountInput.value);
         const diff = isFinite(amount) ? Math.round((amount - itemsAmount) * 100) / 100 : 0;
@@ -189,11 +250,14 @@
           : '与实收核算一致';
         if (reasonWrap) reasonWrap.style.display = hasDiff ? '' : 'none';
         if (hint) hint.style.display = hasDiff && (reasonInput.value.trim().length < 4) ? '' : 'none';
-        return { amount: amount, diff: diff, hasDiff: hasDiff };
+        return { amount: amount, bySupplier: supMap, diff: diff, hasDiff: hasDiff };
       }
 
       if (amountInput) {
         amountInput.addEventListener('input', checkDiff);
+        root.querySelectorAll('[data-sup-amt]').forEach(function (inp) {
+          inp.addEventListener('input', checkDiff);
+        });
         if (reasonInput) reasonInput.addEventListener('input', checkDiff);
         checkDiff();
       }
@@ -214,9 +278,9 @@
           if (!ok) return;
           try {
             App.mutate(function (st, ses) {
-              return domain.submitSettlement(st, ses, {
-                orderId: order.id, amount: d.amount, reason: reasonInput ? reasonInput.value.trim() : ''
-              });
+              const payload = { orderId: order.id, amount: d.amount, reason: reasonInput ? reasonInput.value.trim() : '' };
+              if (d.bySupplier) payload.bySupplier = d.bySupplier;
+              return domain.submitSettlement(st, ses, payload);
             });
             UI.toast('已提交，待供应商确认', 'good');
             render();
@@ -252,14 +316,29 @@
 
       function doAction(action, reason) {
         try {
-          App.mutate(function (st, ses) {
+          const res = App.mutate(function (st, ses) {
             return domain.settleAction(st, ses, { orderId: order.id, action: action, reason: reason });
           });
-          UI.toast(action === 'confirm' ? '已确认，进入待对账' : '已提出异议，退回门店', 'good');
+          UI.toast(
+            action === 'confirm'
+              ? (res && res.allConfirmed === false ? '您已确认，等待其他供应商确认' : '已确认，进入待对账')
+              : '已提出异议，退回门店',
+            'good'
+          );
           render();
         } catch (e) { UI.toast(e.message, 'error', 2800); }
       }
     }
+
+    root.addEventListener('click', function (e) {
+      const btn = e.target.closest('[data-preview-src]');
+      if (!btn) return;
+      UI.sheet({
+        title: btn.dataset.previewTitle || '验收照片',
+        body: '<img src="' + UI.esc(btn.dataset.previewSrc) + '" style="width:100%;border-radius:12px;display:block">',
+        actions: [{ label: '关闭', cls: 'ghost' }]
+      });
+    });
 
     render();
   };

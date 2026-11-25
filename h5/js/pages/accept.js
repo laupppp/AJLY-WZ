@@ -102,6 +102,7 @@
         return { item: order.items.filter(function (x) { return x.id === id; })[0], left: avail.remaining[id] };
       }).filter(function (x) { return x.item; });
 
+      const isActivityService = lines.length > 0 && lines.every(function (x) { return x.item.category === '社区活动服务'; });
       const needInstall = lines.some(function (x) { return BIZ.domain.INSTALL_REQUIRED.indexOf(x.item.id) >= 0; });
 
       root.innerHTML =
@@ -110,7 +111,7 @@
             UI.statusPill(order.status) + '</div>' +
           '<div class="order-meta">' + UI.esc(order.store) + ' · ' + UI.esc(supplier) + '</div>' +
           '<div class="divider"></div>' +
-          '<div class="kv"><span class="k">配送方式</span><span class="v">' + UI.esc(SHIP[sp.method] || '-') +
+          '<div class="kv"><span class="k">' + (isActivityService ? '履约方式' : '配送方式') + '</span><span class="v">' + UI.esc(SHIP[sp.method] || '-') +
             (sp.carrier ? ' · ' + UI.esc(sp.carrier) : '') + (sp.trackingNo ? ' · ' + UI.esc(sp.trackingNo) : '') + '</span></div>' +
           '<div class="kv"><span class="k">预计到达</span><span class="v">' + UI.esc(UI.dateTimeText(sp.estimatedAt) || '未填写') + '</span></div>' +
           '<div class="kv"><span class="k">收货地址</span><span class="v">' + UI.esc(order.address) + '</span></div>' +
@@ -149,10 +150,10 @@
             (photo
               ? '<img class="photo-prev" src="' + photo + '" id="photo-prev">'
               : '<button class="photo-btn" id="photo-btn">' + UI.icon('camera') + '<span>拍照/上传</span></button>') +
-            '<div class="photo-hint">验收照片用于对账争议留证。<br>演示环境会压缩后保存在本机。</div>' +
+            '<div class="photo-hint">' + (isActivityService ? '请上传活动现场或完成效果照片。' : '验收照片用于对账争议留证。') + '<br>演示环境会压缩后保存在本机。</div>' +
             '<input type="file" accept="image/*" capture="environment" id="photo-file" style="display:none">' +
           '</div>' +
-          '<label class="check"><input type="checkbox" id="chk-spec" checked>已核对规格、数量及外观' + (result === 'issue' ? '（异常时可不勾选）' : '') + '</label>' +
+          '<label class="check"><input type="checkbox" id="chk-spec" checked>' + (isActivityService ? '已核对活动场次、人数档位及执行效果' : '已核对规格、数量及外观') + '' + (result === 'issue' ? '（异常时可不勾选）' : '') + '</label>' +
           (needInstall
             ? '<label class="check"><input type="checkbox" id="chk-install">安装类物料已确认安装位置、牢固程度及完工效果</label>'
             : '') +

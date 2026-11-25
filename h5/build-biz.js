@@ -179,7 +179,7 @@ function build() {
   const exportsMap = ids.map(function (id) {
     // BIZ.fmt / BIZ.catalog / BIZ.domain …（format 对外沿用 fmt 这个短名）
     const key = id === 'utils/format' ? 'fmt' : id.replace(/^utils\//, '').replace(/^data\//, '');
-    return '    ' + key + ": load('" + id + "')";
+    return '    ' + JSON.stringify(key) + ": load('" + id + "')";
   });
 
   const footer = [

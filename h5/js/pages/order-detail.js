@@ -37,7 +37,11 @@
     // 结算共同确认入口：门店填金额、供应商确认/异议
     const canSettle = !!domain.settleActorOf(order, me) &&
       ['settle-pending', 'settle-disputed'].indexOf(order.status) >= 0;
-    const canSettleConfirm = me.role === 'supplier' && order.status === 'settle-supplier' && mySub;
+    const canShortClose = ((me && me.role === 'central') || !!domain.settleActorOf(order, me)) &&
+      order.status === 'partial' &&
+      (order.items || []).some(function (x) { return Number(x.accepted || 0) > 0; });
+    const canSettleConfirm = me.role === 'supplier' && order.status === 'settle-supplier' && mySub &&
+      !(order.settlement && order.settlement.confirmedBySuppliers && order.settlement.confirmedBySuppliers[me.supplier]);
     const settleText = order.status === 'settle-pending' ? '待门店确认结算金额'
       : order.status === 'settle-supplier' ? '待供应商确认结算金额'
         : order.status === 'settle-disputed' ? '供应商提出异议，待门店重提'
@@ -60,6 +64,31 @@
 
     const acceptances = (order.acceptances || []).slice().reverse();
     const issues = (order.acceptanceIssues || []).slice().reverse();
+    const evList = Store.listEvidence(order.id);
+    const evMap = {};
+    evList.forEach(function (ev) {
+      if (ev && ev.id && ev.filePath) evMap[ev.id] = ev.filePath;
+    });
+    function photoOf(a) {
+      if (!a) return '';
+      if (a.evidenceId && evMap[a.evidenceId]) return evMap[a.evidenceId];
+      if (a.photoPath && String(a.photoPath).indexOf('data:image/') === 0) return a.photoPath;
+      return '';
+    }
+    function photoBlockHtml(a, title) {
+      const src = photoOf(a);
+      if (src) {
+        return '<div class="ev-row mt8">' +
+          '<button class="ev-thumb-btn" type="button" data-preview-src="' + UI.esc(src) + '" data-preview-title="' + UI.esc(title) + '">' +
+            '<img class="ev-thumb" src="' + UI.esc(src) + '" alt="验收照片">' +
+            '<span class="ev-cap">点击放大查看现场留证</span>' +
+          '</button>' +
+        '</div>';
+      }
+      if (a.noPhoto) return '<div class="tiny" style="color:var(--warn);margin-top:4px">演示环境无照片留证</div>';
+      if (a.evidenceId) return '<div class="tiny muted mt4">已登记留证编号：' + UI.esc(a.evidenceId) + '（本机图片缓存已清理）</div>';
+      return '';
+    }
 
     function itemTags(x) {
       let html = '';
@@ -94,6 +123,9 @@
       (order.status === 'cancelled' && order.closeReason
         ? '<div class="alert mt12">' + UI.icon('alert', 'sm') + '<span>' + UI.esc(order.closeReason) + '</span></div>'
         : '') +
+      (order.status === 'rejected' && order.rejectReason
+        ? '<div class="alert mt12">' + UI.icon('alert', 'sm') + '<span>驳回原因：' + UI.esc(order.rejectReason) + '</span></div>'
+        : '') +
 
       '<div class="card card-pad mt12">' +
         '<div class="section-title mb8">单据信息</div>' +
@@ -103,6 +135,8 @@
         '<div class="kv"><span class="k">用途</span><span class="v">' + UI.esc(order.purpose || '') + '</span></div>' +
         '<div class="kv"><span class="k">期望到货</span><span class="v">' + UI.esc(order.due || '待供应商确认') + '</span></div>' +
         (order.note ? '<div class="kv"><span class="k">备注</span><span class="v">' + UI.esc(order.note) + '</span></div>' : '') +
+        (order.overReason ? '<div class="kv"><span class="k">超预算说明</span><span class="v">' + UI.esc(order.overReason) + '</span></div>' : '') +
+        (order.shortClosed ? '<div class="kv"><span class="k">短收结案</span><span class="v">' + UI.esc(order.shortClosed.reason) + '</span></div>' : '') +
         (order.budgetApplied && order.budgetTransfer
           ? '<div class="kv"><span class="k">追加预算</span><span class="v">¥' + UI.money(order.budgetTransfer) + '（从机动池核定）</span></div>'
           : '') +
@@ -115,7 +149,10 @@
         '<div class="between mb8"><span class="section-title">商品明细</span>' +
           '<span class="tiny muted">' + (order.items || []).length + ' 种</span></div>' +
         (order.items || []).map(function (x) {
-          return '<div class="item-line"><span class="nm">' + UI.esc(x.name) + itemTags(x) +
+          const bk = UI.budgetKeyOf(x);
+          return '<div class="item-line"><span class="nm">' + UI.esc(x.name) +
+            ' <span class="item-tag tone-' + bk + '">' + UI.esc(BIZ.budget.SHORT[bk] || '') + '</span>' +
+            itemTags(x) +
             '<small>' + UI.esc(x.spec || '') + ' · ' + UI.esc(x.supplier || '') + '</small></span>' +
             '<span class="qty">×' + x.qty + '</span>' +
             '<span class="amt">¥' + UI.money(Number(x.price || 0) * Number(x.qty || 0)) + '</span></div>';
@@ -162,14 +199,30 @@
                 '<span class="tiny muted">' + UI.esc(BIZ.fmt.fullTime(a.at)) + '</span></div>' +
                 '<div class="tiny muted mt4">' + UI.esc(a.byName || a.by || '') + (a.note ? ' · ' + UI.esc(a.note) : '') + '</div>' +
                 '<div class="tiny mt4">' + (a.lines || []).map(function (l) { return UI.esc(l.name) + ' ×' + l.qty; }).join('、') + '</div>' +
-                (a.noPhoto ? '<div class="tiny" style="color:var(--warn);margin-top:4px">演示环境无照片留证</div>' : '') +
+                photoBlockHtml(a, '第 ' + a.batchNo + ' 批验收照片') +
               '</div>';
             }).join('') +
             issues.map(function (a) {
-              return '<div class="rec-block" style="border-color:#f6d9d4;background:#fffaf9">' +
-                '<div class="between"><span class="strong" style="color:var(--bad)">第 ' + a.batchNo + ' 批 · 异常反馈</span>' +
-                '<span class="tiny muted">' + UI.esc(BIZ.fmt.fullTime(a.at)) + '</span></div>' +
-                '<div class="tiny mt4">' + UI.esc(a.note || '') + '</div></div>';
+              const resolved = a.status === 'resolved' || !!a.resolvedAt;
+              const canResolve = !resolved && (
+                me.role === 'central' ||
+                (me.role === 'supplier' && (!a.supplier || a.supplier === me.supplier)) ||
+                canAccept
+              );
+              return '<div class="rec-block" style="' + (resolved ? 'border-color:#d4ede2;background:#f7fcf9' : 'border-color:#f6d9d4;background:#fffaf9') + '">' +
+                '<div class="between"><span class="strong" style="color:' + (resolved ? 'var(--good)' : 'var(--bad)') + '">第 ' + a.batchNo + ' 批 · 异常反馈</span>' +
+                '<span class="pill ' + (resolved ? 'good' : 'warn') + '">' + (resolved ? ('已处理 · ' + UI.esc(a.planLabel || '已解决')) : '待响应') + '</span></div>' +
+                '<div class="tiny muted mt4">' + UI.esc(BIZ.fmt.fullTime(a.at)) + '</div>' +
+                '<div class="tiny mt4">' + UI.esc(a.note || '') + '</div>' +
+                (resolved && a.reply
+                  ? '<div class="note-box mt8" style="background:#fff"><b>处理方案：</b>' + UI.esc(a.reply) +
+                    '<div class="tiny muted mt4">' + UI.esc(a.resolvedBy || '') + ' · ' + UI.esc(BIZ.fmt.fullTime(a.resolvedAt)) + '</div></div>'
+                  : '') +
+                photoBlockHtml(a, '第 ' + a.batchNo + ' 批异常留证') +
+                (canResolve
+                  ? '<div class="mt8"><button class="btn soft xs" data-resolve-issue="' + UI.esc(a.id || '') + '" data-issue-sup="' + UI.esc(a.supplier || '') + '">登记处理方案</button></div>'
+                  : '') +
+              '</div>';
             }).join('') +
           '</div>'
         : '') +
@@ -223,11 +276,12 @@
         (canReorder ? '<button class="btn ghost" id="btn-reorder">再次下单</button>' : '') +
         (canCancel ? '<button class="btn danger" id="btn-cancel">撤销</button>' : '') +
         (canClose ? '<button class="btn danger" id="btn-close">关闭订单</button>' : '') +
+        (canShortClose ? '<button class="btn soft" id="btn-short-close">短收结案</button>' : '') +
         (pendingApprovals ? '<button class="btn primary" id="btn-approve">去审批</button>' : '') +
         (canAccept ? '<button class="btn primary" id="btn-accept">去验收</button>' : '') +
         (canSettle || canSettleConfirm ? '<button class="btn primary" id="btn-settle">' + (canSettleConfirm ? '确认结算金额' : '填写结算金额') + '</button>' : '') +
         (canSupply && ['supplier', 'preparing'].indexOf(order.status) >= 0 ? '<button class="btn primary" id="btn-supply">去处理</button>' : '') +
-        (!canReorder && !canCancel && !canClose && !pendingApprovals && !canAccept && !canSupply && !canSettle && !canSettleConfirm
+        (!canReorder && !canCancel && !canClose && !canShortClose && !pendingApprovals && !canAccept && !canSupply && !canSettle && !canSettleConfirm
           ? '<button class="btn ghost" style="flex:1" onclick="history.back()">返回</button>'
           : '') +
       '</div>' +
@@ -238,16 +292,48 @@
 
     const reorder = root.querySelector('#btn-reorder');
     if (reorder) reorder.onclick = function () {
+      const catMap = domain.catalogMapOf(state);
       const cart = Store.loadCart(me.id);
       cart.lines = cart.lines || {};
+      let added = 0;
+      let skipped = 0;
       (order.items || []).forEach(function (x) {
-        if (!BIZ.domain.CATALOG_BY_ID[x.id]) return;
+        const p = catMap[x.id] || BIZ.domain.CATALOG_BY_ID[x.id];
+        if (!p || p.deleted || p.enabled === false || !domain.canActorBuyItem(p, me)) { skipped++; return; }
         cart.lines[x.id] = Math.min(9999, (cart.lines[x.id] || 0) + Number(x.qty || 0));
+        added++;
       });
+      if (!added) {
+        UI.toast('原订单商品已全部下架或删除，无法再次下单', 'error');
+        return;
+      }
       if (order.purchaseType !== 'department') cart.store = order.store;
       Store.saveCart(me.id, cart);
-      UI.toast('已加入清单，可调整数量后提交', 'good');
+      UI.toast(skipped ? ('已加入 ' + added + ' 项（已跳过 ' + skipped + ' 项下架商品）') : '已加入清单，可调整数量后提交', 'good');
       App.go('/catalog');
+    };
+
+    const shortClose = root.querySelector('#btn-short-close');
+    if (shortClose) shortClose.onclick = function () {
+      UI.sheet({
+        title: '办理短收结案',
+        sub: '适用于部分商品破损/缺货且供应商不再补发：将订单数量调整为已验收实收数量，释放未到货预算并进入结算确认。',
+        body: '<div class="field"><div class="label">短收结案原因<span class="req">*</span></div>' +
+          '<textarea class="textarea" id="sc-reason" maxlength="200" placeholder="请填写至少 4 个字的原因，如：剩余1件破损不再补货，按实收结算"></textarea></div>',
+        actions: [
+          { label: '取消', cls: 'ghost' },
+          { label: '确认短收结案', cls: 'primary', onClick: function (_done, bodyEl) {
+              const reason = bodyEl.querySelector('#sc-reason').value.trim();
+              try {
+                App.mutate(function (st, ses) {
+                  return BIZ.domain.finalizeShortDelivery(st, ses, { orderId: order.id, reason: reason });
+                });
+                UI.toast('已完成短收结案，请确认结算金额', 'good');
+                App.reload();
+              } catch (e) { UI.toast(e.message, 'error', 2600); return false; }
+            } }
+        ]
+      });
     };
 
     const cancel = root.querySelector('#btn-cancel');
@@ -301,5 +387,58 @@
 
     const settle = root.querySelector('#btn-settle');
     if (settle) settle.onclick = function () { App.go('/settle/' + order.id); };
+
+    root.addEventListener('click', function (e) {
+      const btn = e.target.closest('[data-preview-src]');
+      if (btn) {
+        UI.sheet({
+          title: btn.dataset.previewTitle || '验收照片',
+          body: '<img src="' + UI.esc(btn.dataset.previewSrc) + '" style="width:100%;border-radius:12px;display:block">',
+          actions: [{ label: '关闭', cls: 'ghost' }]
+        });
+        return;
+      }
+
+      const ri = e.target.closest('[data-resolve-issue]');
+      if (ri) {
+        let plan = 'reship';
+        UI.sheet({
+          title: '处理验收异常 · ' + order.id,
+          sub: '填写处理方案后将关闭该条异常待办提醒并记录流转审计',
+          body:
+            '<div class="field"><div class="label">处理方案<span class="req">*</span></div>' +
+              '<div class="radio-cards" id="od-ri-plans">' +
+                '<label class="radio-card on" data-p="reship"><span class="rd"></span><span class="grow"><span>安排补发 / 换货</span><span class="d">补充交付缺失或破损物资</span></span></label>' +
+                '<label class="radio-card" data-p="discount"><span class="rd"></span><span class="grow"><span>转结算折让</span><span class="d">不再补发，按实际协商价在结算页减免</span></span></label>' +
+                '<label class="radio-card" data-p="resolved"><span class="rd"></span><span class="grow"><span>协商结案</span><span class="d">双方已确认处理完毕</span></span></label>' +
+              '</div></div>' +
+            '<div class="field"><div class="label">处理说明<span class="req">*</span></div>' +
+              '<textarea class="textarea" id="od-ri-reply" maxlength="300" placeholder="请填写处理结果或预计补发时间"></textarea></div>',
+          mount: function (bodyEl) {
+            bodyEl.querySelector('#od-ri-plans').addEventListener('click', function (ev) {
+              const cardEl = ev.target.closest('[data-p]');
+              if (!cardEl) return;
+              plan = cardEl.dataset.p;
+              bodyEl.querySelectorAll('[data-p]').forEach(function (x) { x.classList.toggle('on', x.dataset.p === plan); });
+            });
+          },
+          actions: [
+            { label: '取消', cls: 'ghost' },
+            { label: '确认提交', cls: 'primary', onClick: function (_close, bodyEl) {
+                const reply = bodyEl.querySelector('#od-ri-reply').value.trim();
+                try {
+                  App.mutate(function (st, ses) {
+                    return domain.resolveAcceptanceIssue(st, ses, {
+                      orderId: order.id, issueId: ri.dataset.resolveIssue || '', supplier: ri.dataset.issueSup || '', plan: plan, reply: reply
+                    });
+                  });
+                  UI.toast('已登记异常处理方案', 'good');
+                  App.reload();
+                } catch (err) { UI.toast(err.message, 'error', 2600); return false; }
+              } }
+          ]
+        });
+      }
+    });
   };
 })(window.Views);

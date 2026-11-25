@@ -2,7 +2,8 @@
 (function (Views) {
   const ENTRY_HASH = {
     order: '/catalog', orders: '/orders', accept: '/accept', drafts: '/drafts',
-    approve: '/approvals', recon: '/reports?tab=recon', reports: '/reports', supply: '/supplier'
+    approve: '/approvals', recon: '/reports?tab=recon', reports: '/reports', supply: '/supplier',
+    budget: '/budget', console: '/console'
   };
   const TONE = { blue: 'blue', navy: 'navy', teal: 'teal', amber: 'amber', violet: 'violet', gray: 'gray' };
 
@@ -234,7 +235,7 @@
   function budgetRow(b) {
     const tone = b.usedPct >= 90 ? 'bad' : b.usedPct >= 70 ? 'warn' : '';
     const items = (b.items || []).map(function (it) {
-      const t = it.usedPct >= 90 ? 'bad' : it.usedPct >= 70 ? 'warn' : '';
+      const t = it.usedPct >= 90 ? 'bad' : it.usedPct >= 70 ? 'warn' : ('tone-' + it.key);
       return '<div class="budget-item">' +
         '<span class="bi-name">' + UI.esc(it.name) + '</span>' +
         '<span class="bi-bar"><i class="' + t + '" style="width:' + Math.min(100, it.usedPct) + '%"></i></span>' +
@@ -253,6 +254,6 @@
 
   const ICON_OF = {
     order: 'cart', orders: 'orders', accept: 'camera', drafts: 'box',
-    approve: 'check', recon: 'bill', reports: 'chart', supply: 'truck', budget: 'bill'
+    approve: 'check', recon: 'bill', reports: 'chart', supply: 'truck', budget: 'bill', console: 'shop'
   };
 })(window.Views);

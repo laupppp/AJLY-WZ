@@ -2,7 +2,7 @@
 const CAPS = {
   store: ['order.create', 'order.view', 'accept', 'draft', 'stats', 'settle.submit'],
   department: ['order.create', 'order.view', 'accept', 'draft', 'stats', 'settle.submit'],
-  central: ['order.create', 'order.view', 'accept', 'draft', 'stats', 'approve', 'recon', 'budget.config'],
+  central: ['order.create', 'order.view', 'accept', 'draft', 'stats', 'approve', 'recon', 'budget.config', 'catalog.manage'],
   region: ['order.view', 'approve', 'stats'],
   supplier: ['supply', 'order.view', 'stats', 'recon.confirm', 'settle.confirm']
 };
@@ -23,8 +23,8 @@ const ROLE_META = {
   central: {
     label: '运营管理部',
     tone: 'navy',
-    duty: '预算核定、部门确认与统一对账',
-    brief: ['中台自采下单', '预算核定与金额审批', '部门采购统一确认', '统一对账与锁定', '门店费用预算设置']
+    duty: '预算核定、物资维护、部门确认与统一对账',
+    brief: ['中台操作台（物资增删改/合同上限/审批规则）', '中台自采下单', '预算核定与金额审批', '部门采购统一确认', '统一对账与锁定', '门店费用预算设置']
   },
   region: {
     label: '战区负责人',
@@ -80,7 +80,7 @@ const TABS = {
 const HOME_ENTRIES = {
   store: ['order', 'orders', 'accept', 'drafts'],
   department: ['order', 'orders', 'accept', 'drafts'],
-  central: ['order', 'approve', 'orders', 'budget'],
+  central: ['console', 'approve', 'budget', 'order'],
   region: ['approve', 'orders', 'reports'],
   supplier: ['supply', 'orders', 'recon']
 };
@@ -93,6 +93,7 @@ const ENTRY_META = {
   approve: { label: '待办审批', icon: '✅', url: '/pages/approvals/approvals', tone: 'amber' },
   recon: { label: '统一对账', icon: '🧾', url: '/pages/reports/reports?tab=recon', tone: 'violet' },
   budget: { label: '预算设置', icon: '💰', url: '/pages/budget/budget', tone: 'teal' },
+  console: { label: '中台操作台', icon: '🛠️', url: '/pages/budget/budget', tone: 'navy' },
   reports: { label: '统计看板', icon: '📊', url: '/pages/reports/reports', tone: 'blue' },
   supply: { label: '供应商工作台', icon: '🚚', url: '/pages/supplier/supplier', tone: 'amber' }
 };

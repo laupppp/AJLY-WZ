@@ -53,10 +53,13 @@
       const myRec = inSettle ? null : (me.role === 'supplier' ? (o.supplierRecords || {})[me.supplier] : null);
       const itemNames = (o.items || []).slice(0, 3).map(function (x) { return x.name + '×' + x.qty; }).join('、');
       const more = (o.items || []).length > 3 ? ' 等 ' + o.items.length + ' 项' : '';
+      const cls = myRec
+        ? (({ pending: 'warn', confirmed: 'info', shipping: 'teal', accepted: 'good', issue: 'bad' })[myRec.status] || 'gray')
+        : BIZ.fmt.statusCls(o.status);
       const statusHtml = myRec
         ? UI.supplierPill(myRec.status)
         : UI.statusPill(o.status);
-      return '<a class="order-card" href="#/order/' + UI.esc(o.id) + '">' +
+      return '<a class="order-card accent-' + UI.esc(cls) + '" href="#/order/' + UI.esc(o.id) + '">' +
         '<div class="order-top"><span class="order-id">' + UI.esc(o.id) + '</span>' + statusHtml +
           (sla ? '<span class="sla ' + (sla.level === 'overdue' ? 'bad' : 'warn') + '" style="margin-left:auto">' + UI.icon('clock', 'xs') + BIZ.fmt.hoursText(sla.hours) + (sla.level === 'overdue' ? '超时' : '') + '</span>' : '') +
         '</div>' +

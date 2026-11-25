@@ -34,11 +34,9 @@ PRODUCTS.forEach(function (p) { PRODUCT_MAP[p.id] = p; });
 
 // 左侧栏宽度只有 176rpx，大类用 4 字短名，完整名称显示在右侧列表标题
 const TOP_SHORT = {
-  '奖品礼品': '奖品礼品',
-  '活动及社群物资': '活动社群',
-  '日常运营耗材': '日常耗材',
-  '宣传印刷物料': '宣传印刷',
-  '员工物资': '员工物资'
+  '社群活动物资': '社群活动',
+  '客诉维护物资': '客诉物资',
+  '印刷品物料': '印刷物料'
 };
 
 // 左侧导航：全部 + 5 个大类，每个大类带二级分类（只有 1 个二级的不再展开）
@@ -60,6 +58,46 @@ const NAV = [{
   };
 }));
 
+
+function buildDynamicCatalog(state, me) {
+  const rawList = domain.catalogOf(state, { activeOnly: true, buyer: me });
+  const subs = subcats.build(rawList);
+  const products = rawList.map(function (p) {
+    const sub = subs.byId[p.id];
+    return {
+      id: p.id,
+      name: p.name,
+      spec: p.spec,
+      unit: p.unit,
+      price: p.price,
+      priceText: fmt.money2(p.price),
+      supplier: p.supplier,
+      category: p.category,
+      purchaseScope: p.purchaseScope || 'all',
+      sub: sub ? sub.key : '',
+      subLabel: sub ? sub.label : '',
+      demoOnly: p.demoOnly,
+      icon: (CATEGORY_META[p.category] || { icon: '📦' }).icon,
+      key: (p.name + ' ' + (p.spec || '') + ' ' + p.supplier + ' ' + p.id).toLowerCase()
+    };
+  });
+  const productMap = {};
+  products.forEach(function (p) { productMap[p.id] = p; });
+  const nav = [{
+    key: 'all', label: '全部物资', short: '全部物资', count: products.length, subs: []
+  }].concat(subs.nav.map(function (c) {
+    return {
+      key: c.key,
+      label: c.label,
+      short: TOP_SHORT[c.label] || c.label,
+      count: c.count,
+      subs: c.subs.length > 1 ? c.subs.map(function (s) {
+        return { key: s.key, label: s.label, short: s.short, count: s.count };
+      }) : []
+    };
+  }));
+  return { products: products, productMap: productMap, nav: nav };
+}
 
 Page({
   onShareAppMessage: share.handler,
@@ -122,6 +160,10 @@ Page({
 
     const contextName = me.role === 'store' ? (me.stores[storeIndex] || '') : (me.department || '');
 
+    const built = buildDynamicCatalog(state, me);
+    this.products = built.products;
+    this.productMap = built.productMap;
+
     const saved = store.loadCart();
     let cart = {};
     if (saved && saved.ownerId === me.id && saved.context === contextName) {
@@ -145,20 +187,20 @@ Page({
       stores: me.role === 'store' ? me.stores : [],
       storeIndex: storeIndex,
       contextName: contextName,
+      nav: built.nav,
       hint: hint
     });
 
-    // 常买清单：按本人历史下单数量排序，一键加回购物车
-    this.frequentSource = canBuy ? domain.frequentItems(state, me, 6) : [];
+    this.frequentSource = [];
 
     const q = this.initialQuery || {};
     if (q.category) {
-      const hit = NAV.filter(function (n) { return n.key === q.category; })[0];
+      const hit = built.nav.filter(function (n) { return n.key === q.category; })[0];
       if (hit) this.setData({ activeCat: hit.key, activeSub: '', expandedCat: hit.key });
       q.category = '';
     }
     if (q.sub) {
-      const catOfSub = NAV.filter(function (n) {
+      const catOfSub = built.nav.filter(function (n) {
         return n.subs.some(function (s) { return s.key === q.sub; });
       })[0];
       if (catOfSub) this.setData({ activeCat: catOfSub.key, activeSub: q.sub, expandedCat: catOfSub.key });
@@ -173,11 +215,13 @@ Page({
     const sub = this.data.activeSub;
     const keyword = (this.data.keyword || '').trim().toLowerCase();
     const cart = this.data.cart || {};
+    const navList = this.data.nav || NAV;
+    const listSrc = this.products || PRODUCTS;
 
     // 记住二级分类名称，用于列表标题与面包屑
     let catLabel = '';
     let subLabel = '';
-    NAV.forEach(function (n) {
+    navList.forEach(function (n) {
       if (n.key !== cat) return;
       catLabel = n.label;
       n.subs.forEach(function (s) {
@@ -185,7 +229,7 @@ Page({
       });
     });
 
-    const filtered = PRODUCTS.filter(function (p) {
+    const filtered = listSrc.filter(function (p) {
       // 有关键词时全局搜索，避免“在某个二级分类里搜不到别的分类商品”
       if (!keyword) {
         if (sub && p.sub !== sub) return false;
@@ -294,11 +338,12 @@ Page({
   applyCart(cart, contextName) {
     const me = this.data.me;
     const context = contextName === undefined ? this.data.contextName : contextName;
+    const pmap = this.productMap || PRODUCT_MAP;
     const lines = [];
     let count = 0;
     let amountCents = 0;
     Object.keys(cart).forEach(function (id) {
-      const p = PRODUCT_MAP[id];
+      const p = pmap[id];
       const qty = cart[id];
       if (!p || !qty) return;
       count += qty;

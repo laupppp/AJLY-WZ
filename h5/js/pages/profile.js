@@ -21,7 +21,8 @@
       'recon.confirm': '对账确认',
       'settle.submit': '确认结算金额',
       'settle.confirm': '确认结算金额',
-      'budget.config': '门店预算设置'
+      'budget.config': '门店预算设置',
+      'catalog.manage': '中台物资/规则管理'
     };
 
     root.innerHTML =
@@ -44,6 +45,15 @@
           return '<span class="mini-tag">' + UI.esc(CAP_LABEL[c] || c) + '</span>';
         }).join('') + '</div>' +
       '</div>' +
+
+      (me.role === 'central'
+        ? '<div class="card card-pad mt12">' +
+            '<a class="tbl-link" href="#/console" style="display:flex;align-items:center;justify-content:space-between">' +
+              '<span><span class="section-title">中台操作台</span>' +
+              '<span class="tiny muted" style="display:block;margin-top:4px">物资增删改、供应商合同上限与审批规则配置</span></span>' +
+              UI.icon('right', 'sm') + '</a>' +
+          '</div>'
+        : '') +
 
       '<div class="card card-pad mt12">' +
         '<a class="tbl-link" href="#/guide" style="display:flex;align-items:center;justify-content:space-between">' +

@@ -5,13 +5,13 @@ const STATUS_MAP = {
   'budget-central': { label: '待运营管理部核定预算', cls: 'warn' },
   'amount-approval': { label: '待金额审批', cls: 'warn' },
   'dept-approval': { label: '待运营管理部确认', cls: 'warn' },
-  'supplier': { label: '待供应商接单', cls: 'warn' },
-  'preparing': { label: '备货中', cls: 'warn' },
-  'delivering': { label: '配送中', cls: 'info' },
-  'delivered': { label: '已送达待验收', cls: 'info' },
-  'partial': { label: '部分验收', cls: 'info' },
-  'settle-pending': { label: '待门店确认结算', cls: 'warn' },
-  'settle-supplier': { label: '待供应商确认结算', cls: 'info' },
+  'supplier': { label: '待供应商接单', cls: 'info' },
+  'preparing': { label: '备货中', cls: 'info' },
+  'delivering': { label: '配送中', cls: 'teal' },
+  'delivered': { label: '已送达待验收', cls: 'teal' },
+  'partial': { label: '部分验收', cls: 'teal' },
+  'settle-pending': { label: '待门店确认结算', cls: 'violet' },
+  'settle-supplier': { label: '待供应商确认结算', cls: 'violet' },
   'settle-disputed': { label: '结算有差异待重提', cls: 'bad' },
   'accepted': { label: '结算已确认待对账', cls: 'dark' },
   'done': { label: '已完成', cls: 'good' },
@@ -47,12 +47,12 @@ const ROLE_LABEL = {
   department: '职能部门采购员'
 };
 
-// 所有门店单先经战区审核；金额分级决定审核之后是否再走金额审批
+// 所有门店单先经战区审核；金额分级决定审核之后是否再走中台金额审批（500-2000元战区一步终审）
 const TIER_LABEL = {
-  auto: '500元以内 · 战区审核后直发',
-  region: '500-2000元 · 战区审核（含金额）',
+  auto: '500元以内 · 战区一步审核直发',
+  region: '500-2000元 · 战区一步终审（含金额）',
   central: '2000元以上 · 战区审核 + 中台金额审批',
-  department: '部门采购 · 运管确认'
+  department: '部门采购 · 运管确认（合同总额上限）'
 };
 
 function statusLabel(status) {

@@ -11,7 +11,8 @@
     "h5:serve": "cd h5 && python3 -m http.server 8899",
     "h5:lint": "node h5/check-syntax.js",
     "h5:verify": "node h5/build-biz.js --check && node h5/build-standalone.js --check && node h5/check-syntax.js",
-    "test": "node h5/build-biz.js --check && node h5/build-standalone.js --check && node h5/check-syntax.js"
+    "test:unit": "node --test tests/domain.test.js",
+    "test": "node h5/build-biz.js --check && node h5/build-standalone.js --check && node h5/check-syntax.js && node --test tests/domain.test.js"
   },
   "keywords": [],
   "author": "",

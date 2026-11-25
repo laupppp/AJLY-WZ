@@ -7,9 +7,11 @@
     const state = ctx.state;
     const isDept = perm.isDepartmentFlow(me);
 
+    const catMap = domain.catalogMapOf(state);
     const cart = Store.loadCart(me.id);
     const items = Object.keys(cart.lines || {}).filter(function (id) {
-      return cart.lines[id] > 0 && BIZ.domain.CATALOG_BY_ID[id];
+      const p = catMap[id];
+      return cart.lines[id] > 0 && p && p.enabled !== false && !p.deleted && domain.canActorBuyItem(p, me);
     }).map(function (id) {
       return { id: id, qty: cart.lines[id] };
     });
@@ -20,6 +22,7 @@
       return;
     }
 
+    const isActivityService = items.every(function (x) { return catMap[x.id] && catMap[x.id].category === '社区活动服务'; });
     const zoneStores = Object.keys(BIZ.catalog.STORE_ZONES || {});
     const deptStores = zoneStores.length ? zoneStores : (me.stores || []);
 
@@ -39,21 +42,32 @@
     const form = {
       receiver: me.name,
       address: isDept ? '公司总部收货区（演示地址）' : destStore + ' 收货区（演示地址）',
-      purpose: isDept ? '部门日常采购' : '门店日常运营',
+      purpose: isActivityService ? '社区活动执行服务' : (isDept ? '部门日常采购' : '门店日常运营'),
       due: dftDate,
-      note: ''
+      note: '',
+      overReason: '',
+      splitByContract: true
     };
+
+    const distinctSuppliers = [];
+    items.forEach(function (x) {
+      const p = catMap[x.id] || BIZ.domain.CATALOG_BY_ID[x.id];
+      if (p && p.supplier && distinctSuppliers.indexOf(p.supplier) < 0) distinctSuppliers.push(p.supplier);
+    });
+    const hasMultiContracts = !isDept && distinctSuppliers.length > 1;
 
     function quoteOf() {
       if (isDept) {
-        const total = items.reduce(function (s, x) {
-          return s + BIZ.domain.CATALOG_BY_ID[x.id].price * x.qty;
-        }, 0);
+        const dq = domain.computeDepartmentQuote(state, items);
         return {
-          total: Math.round(total * 100) / 100,
-          overBudget: false,
-          tierLabel: '部门采购',
-          pathText: me.role === 'central' ? '运营管理部自采，提交后直接发送供应商' : '部门采购，提交后由运营管理部统一确认',
+          total: dq.total,
+          overBudget: dq.overCap,
+          hardOver: dq.overCap,
+          contractRows: dq.contractRows,
+          tierLabel: '部门采购（合同上限）',
+          pathText: dq.overCap
+            ? '超出所选供应商框架合同剩余可用总额，请缩减数量或在中台操作台调整合同总额'
+            : (me.role === 'central' ? '运营管理部自采（合同额度内），提交后直接发送供应商' : '部门采购（合同额度内），提交后由运营管理部统一确认'),
           maxSupport: null
         };
       }
@@ -67,12 +81,23 @@
     function renderQuote() {
       const q = quoteOf();
       const host = root.querySelector('#quote');
+      const submitBtn = root.querySelector('#btn-submit');
+      const overWrap = root.querySelector('#over-reason-wrap');
       if (!q || q.error) {
         host.innerHTML = '<div class="small" style="color:var(--bad)">' + UI.esc(q ? q.error : '试算失败') + '</div>';
+        if (submitBtn) submitBtn.disabled = true;
         return;
       }
+      if (submitBtn) {
+        submitBtn.disabled = !!q.hardOver;
+        submitBtn.textContent = q.hardOver ? (isDept ? '超出合同上限' : '超出可核定上限') : '提交订单';
+      }
+      if (overWrap) {
+        overWrap.style.display = (!isDept && q.overBudget && !q.hardOver) ? 'block' : 'none';
+      }
+
       const lines = items.map(function (x) {
-        const p = BIZ.domain.CATALOG_BY_ID[x.id];
+        const p = catMap[x.id] || BIZ.domain.CATALOG_BY_ID[x.id];
         return '<div class="item-line"><span class="nm">' + UI.esc(p.name) +
           '<small>' + UI.esc(p.spec || '') + '</small></span>' +
           '<span class="qty">×' + x.qty + '</span>' +
@@ -83,11 +108,24 @@
         ? '<div class="cat-split">' + q.budgetItems.map(function (r) {
             const pct = r.budget > 0 ? Math.min(100, Math.round(r.total / r.budget * 100)) : 0;
             return '<div class="cat-line">' +
-              '<div class="between"><span class="cat-name">' + UI.esc(r.name) + '</span>' +
+              '<div class="between"><span class="cat-name">' + UI.budgetPill(r.key, r.name) + '</span>' +
                 '<span class="cat-amt' + (r.overBudget ? ' red' : '') + '">¥' + UI.money(r.total) + '</span></div>' +
-              '<div class="bar" style="height:4px"><i class="' + (r.overBudget ? 'bad' : '') + '" style="width:' + Math.min(100, pct) + '%"></i></div>' +
+              '<div class="bar" style="height:4px"><i class="' + (r.overBudget ? 'bad' : ('tone-' + r.key)) + '" style="width:' + Math.min(100, pct) + '%"></i></div>' +
               '<div class="tiny muted mt4">该科目可用 ¥' + UI.money(r.usable) +
                 (r.overBudget ? ' · 超 ¥' + UI.money(r.over) : '') + '</div>' +
+            '</div>';
+          }).join('') + '</div>'
+        : '';
+
+      const contractRows = (isDept && q.contractRows && q.contractRows.length)
+        ? '<div class="cat-split">' + q.contractRows.map(function (r) {
+            const pct = r.total > 0 ? Math.min(100, Math.round((r.used + r.apply) / r.total * 100)) : 0;
+            return '<div class="cat-line">' +
+              '<div class="between"><span class="cat-name">' + UI.esc(r.supplier) + ' 合同额度</span>' +
+                '<span class="cat-amt' + (r.overCap ? ' red' : '') + '">本次 ¥' + UI.money(r.apply) + '</span></div>' +
+              '<div class="bar" style="height:4px"><i class="' + (r.overCap ? 'bad' : '') + '" style="width:' + pct + '%"></i></div>' +
+              '<div class="tiny muted mt4">合同总额 ¥' + UI.money(r.total) + ' · 剩余可用 ¥' + UI.money(r.remaining) +
+                (r.overCap ? ' · 超出上限 ¥' + UI.money(r.over) : '') + '</div>' +
             '</div>';
           }).join('') + '</div>'
         : '';
@@ -97,21 +135,35 @@
           '<span class="tiny muted">' + items.length + ' 种 / ' + items.reduce(function (s, x) { return s + x.qty; }, 0) + ' 件</span></div>' +
         lines +
         catRows +
+        contractRows +
         '<div class="divider"></div>' +
         '<div class="kv"><span class="k">订单金额</span><span class="v num money" style="font-size:18px">¥' + UI.money(q.total) + '</span></div>' +
         (!isDept
-          ? '<div class="kv"><span class="k">科目可用额度</span><span class="v num">¥' + UI.money(q.available) + '</span></div>' +
+          ? '<div class="kv"><span class="k">科目可用额度</span><span class="v num">¥' + UI.money(q.available) + '<span class="tiny muted">（房间数 × 科目系数）</span></span></div>' +
             '<div class="kv"><span class="k">可核定上限</span><span class="v num">¥' + UI.money(q.maxSupport) + '<span class="tiny muted">（门店额度 + 机动池）</span></span></div>' +
             (q.overBudget
               ? '<div class="kv"><span class="k" style="color:var(--bad)">超出可用</span><span class="v num money red">¥' + UI.money(q.overAmount) + '</span></div>'
+              : '') +
+            (q.splitUpgraded
+              ? '<div class="kv"><span class="k">近' + q.splitDays + '天本店累计</span><span class="v num">¥' + UI.money(q.cumulativeTotal) + '<span class="tiny muted">（防拆单合并定档）</span></span></div>'
               : '')
           : '') +
         '<div class="kv"><span class="k">审批路径</span><span class="v">' +
-          '<span class="pill ' + (q.overBudget && q.hardOver ? 'bad' : q.overBudget ? 'warn' : 'info') + '">' + UI.esc(q.tierLabel) + '</span>' +
+          '<span class="pill ' + (q.hardOver ? 'bad' : q.overBudget ? 'warn' : 'info') + '">' + UI.esc(q.tierLabel) + '</span>' +
           '<div class="tiny muted mt4">' + UI.esc(q.pathText) + '</div></span></div>' +
         (q.hardOver
-          ? '<div class="alert mt8">' + UI.icon('alert', 'sm') + '<span>超过单笔可核定上限，建议拆分下单或转专项采购</span></div>'
+          ? '<div class="alert mt8">' + UI.icon('alert', 'sm') +
+            '<span>' + (isDept ? '已超过供应商合同总额上限，无法直接提交，请缩减数量或由中台调整合同额度' : '超过「科目额度 + 机动池」可核定上限，无法提交，请拆分下单或转专项采购') + '</span></div>'
+          : '') +
+        (hasMultiContracts
+          ? '<label class="check" style="margin-top:8px;padding-top:10px;border-top:1px dashed var(--line-2)">' +
+              '<input type="checkbox" id="chk-split-contract"' + (form.splitByContract ? ' checked' : '') + '>' +
+              '<span><b>按框架合同自动拆分为 ' + distinctSuppliers.length + ' 笔订单</b>' +
+                '<span class="tiny muted" style="display:block;margin-top:2px">本单含 ' + UI.esc(distinctSuppliers.map(function (s) { return s.replace(/[（(].*[)）]/g, ''); }).join('、')) + '；拆单后各自审批、验货、结算与对账，互不串账</span></span>' +
+            '</label>'
           : '');
+      const chk = host.querySelector('#chk-split-contract');
+      if (chk) chk.onchange = function () { form.splitByContract = !!chk.checked; };
     }
 
     const destOptions = isDept
@@ -137,15 +189,17 @@
         '<div class="field-row">' +
           '<div class="field"><div class="label">收货人<span class="req">*</span></div>' +
             '<input class="input" id="f-receiver" value="' + UI.esc(form.receiver) + '" maxlength="20"></div>' +
-          '<div class="field"><div class="label">期望到货</div>' +
+          '<div class="field"><div class="label">' + (isActivityService ? '期望活动日期' : '期望到货') + '</div>' +
             '<input class="input" id="f-due" type="date" min="' + UI.todayStr() + '" value="' + form.due + '"></div>' +
         '</div>' +
-        '<div class="field"><div class="label">收货地址<span class="req">*</span></div>' +
+        '<div class="field"><div class="label">' + (isActivityService ? '活动地点' : '收货地址') + '<span class="req">*</span></div>' +
           '<input class="input" id="f-address" value="' + UI.esc(form.address) + '" maxlength="80" placeholder="楼栋 / 门牌 / 收货点"></div>' +
         '<div class="field"><div class="label">采购用途</div>' +
           '<input class="input" id="f-purpose" value="' + UI.esc(form.purpose) + '" maxlength="40"></div>' +
         '<div class="field"><div class="label">备注</div>' +
           '<textarea class="textarea" id="f-note" maxlength="200" placeholder="选填，例如活动时间、摆放要求"></textarea></div>' +
+        '<div class="field" id="over-reason-wrap" style="display:none"><div class="label" style="color:var(--bad)">超预算说明<span class="req">*</span></div>' +
+          '<textarea class="textarea" id="f-over-reason" maxlength="160" placeholder="本单超出科目可用额度，请填写至少4个字的超预算原因，供战区与运营管理部核定"></textarea></div>' +
       '</div>' +
 
       '<div class="card card-pad mt12" id="quote"></div>' +
@@ -201,12 +255,14 @@
     renderQuote();
 
     function readForm() {
+      const overEl = root.querySelector('#f-over-reason');
       return {
         receiver: root.querySelector('#f-receiver').value.trim(),
         address: root.querySelector('#f-address').value.trim(),
         purpose: root.querySelector('#f-purpose').value.trim() || '门店日常运营',
         due: root.querySelector('#f-due').value || '',
-        note: root.querySelector('#f-note').value.trim()
+        note: root.querySelector('#f-note').value.trim(),
+        overReason: overEl ? overEl.value.trim() : ''
       };
     }
 
@@ -216,6 +272,13 @@
       if (!f.address) return '请填写收货地址';
       if (f.address.length > 80) return '地址过长，请精简';
       if (f.due && f.due < UI.todayStr()) return '期望到货日期不能早于今天';
+      const q = quoteOf();
+      if (q && q.hardOver) {
+        return isDept ? '已超出供应商合同总额上限，无法提交' : '已超出门店科目可用额度与机动池可核定上限，请拆分下单';
+      }
+      if (!isDept && q && q.overBudget && (!f.overReason || f.overReason.length < 4)) {
+        return '本单超出科目可用额度，请填写至少 4 个字的超预算说明';
+      }
       return '';
     }
 
@@ -250,17 +313,28 @@
             return BIZ.domain.createStoreOrder(st, ses, {
               store: destStore,
               details: f,
-              items: items
+              items: items,
+              splitByContract: form.splitByContract
             });
           });
           Store.clearCart(me.id);
-          Store.appendAudit([{
-            orderId: res.order.id, kind: 'submit', stage: 'submit', decision: '提交订单',
-            role: me.name, from: '', to: res.order.status,
-            note: '门店采购 ' + items.length + ' 项，金额 ¥' + UI.money(res.order.total), at: new Date().toISOString()
-          }]);
-          UI.toast('已提交，金额 ¥' + UI.money(res.order.total), 'good');
-          App.go('/order/' + res.order.id);
+          const createdOrders = (res && res.orders && res.orders.length) ? res.orders : [res.order];
+          const nowIso = new Date().toISOString();
+          Store.appendAudit(createdOrders.map(function (o) {
+            return {
+              orderId: o.id, kind: 'submit', stage: 'submit', decision: '提交订单',
+              role: me.name, from: '', to: o.status,
+              note: '门店采购 ' + (o.items || []).length + ' 项，金额 ¥' + UI.money(o.total) + (res.splitByContract ? '（按合同拆单）' : ''),
+              at: nowIso
+            };
+          }));
+          if (createdOrders.length > 1) {
+            UI.toast('已按合同拆分为 ' + createdOrders.length + ' 笔订单提交', 'good', 2400);
+            App.go('/orders');
+          } else {
+            UI.toast('已提交，金额 ¥' + UI.money(createdOrders[0].total), 'good');
+            App.go('/order/' + createdOrders[0].id);
+          }
         }
       } catch (e) {
         btn.disabled = false;
@@ -280,7 +354,8 @@
         destType: destType,
         details: f,
         amount: items.reduce(function (s, x) {
-          return s + BIZ.domain.CATALOG_BY_ID[x.id].price * x.qty;
+          const p = catMap[x.id] || BIZ.domain.CATALOG_BY_ID[x.id];
+          return s + (p ? p.price : 0) * x.qty;
         }, 0),
         count: items.length,
         updatedAt: now

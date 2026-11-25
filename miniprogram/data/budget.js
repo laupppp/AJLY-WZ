@@ -5,16 +5,16 @@ const round2 = function (n) { return Math.round(Number(n || 0) * 100) / 100; };
 // 三项费用科目。coef 为默认系数（元/间房/年）
 const ITEMS = [
   {
-    key: 'community', name: '社群费', short: '社群', coef: 10, tone: 'blue',
-    desc: '社群运营、活动物资、便民与氛围物资'
+    key: 'community', name: '社群活动预算', short: '社群', coef: 10, tone: 'blue', contract: '运营物资合同',
+    desc: '运营物资合同 · 社群活动、茶歇互动与现场氛围物资'
   },
   {
-    key: 'customer', name: '客户维护费', short: '维护', coef: 10, tone: 'teal',
-    desc: '客户维护礼品、门店日常服务耗材'
+    key: 'customer', name: '客诉预算', short: '客诉', coef: 10, tone: 'teal', contract: '运营物资合同',
+    desc: '运营物资合同 · 客诉安抚礼品、日常客户维护与运营耗材'
   },
   {
-    key: 'marketing', name: '营销费', short: '营销', coef: 10, tone: 'violet',
-    desc: '宣传印刷、标识标牌、展示与喷绘安装'
+    key: 'marketing', name: '营销预算', short: '营销', coef: 10, tone: 'violet', contract: '印刷品物料合同',
+    desc: '印刷品物料合同 · 宣传印刷品、标识标牌、展架喷绘与安装'
   }
 ];
 const KEYS = ITEMS.map(function (i) { return i.key; });
@@ -35,22 +35,29 @@ ITEMS.forEach(function (i) {
 const DEFAULT_ROOMS = 1000;   // 每个门店管理的房间数（演示统一 1000）
 const DEFAULT_BASE_USED = { community: 800, customer: 600, marketing: 400 }; // 期初已用（历史结转）
 
-// 商品大类 → 费用科目。目录里单个商品可用 product.budgetItem 覆盖
+// 商品大类 → 费用科目（以合同×预算项为基础分为 3 大类，兼容历史数据旧分类名）
 const CATEGORY_MAP = {
+  '社群活动物资': 'community',
+  '客诉维护物资': 'customer',
+  '印刷品物料': 'marketing',
+  '社区活动服务': 'community',
   '活动及社群物资': 'community',
   '奖品礼品': 'customer',
+  '奖品类': 'customer',
   '日常运营耗材': 'customer',
   '宣传印刷物料': 'marketing',
   '员工物资': 'customer'
 };
 const FALLBACK = 'customer';
 
-// 接受商品（含 category / budgetItem）或订单行，返回科目 key
+// 接受商品（含 category / budgetItem / supplier）或订单行，返回科目 key
 function itemOf(thing) {
   if (!thing) return FALLBACK;
   if (thing.budgetItem && NAME[thing.budgetItem]) return thing.budgetItem;
   const cat = thing.category || '';
-  return CATEGORY_MAP[cat] || FALLBACK;
+  if (CATEGORY_MAP[cat]) return CATEGORY_MAP[cat];
+  if (thing.supplier && String(thing.supplier).indexOf('印刷') >= 0) return 'marketing';
+  return FALLBACK;
 }
 
 function itemName(key) { return NAME[key] || key; }

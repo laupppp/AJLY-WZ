@@ -29,11 +29,11 @@
     // 导致顶部数字与列表条数不符（如结算确认显示 9 单却只有 1 单）
     function classify(o) {
       const rec = o.supplierRecords[supplier] || {};
+      if (rec.status === 'pending') return 'pending';
+      if (rec.status === 'issue' || domain.hasOpenAcceptanceIssue(o, supplier)) return 'issue';
       // 验收完成后分项记录已是 accepted，但结算金额仍需双方确认，
       // 因此优先按订单状态分流到「结算确认」，不能简单归入「已完成」
       if (['settle-pending', 'settle-supplier', 'settle-disputed'].indexOf(o.status) >= 0) return 'settle';
-      if (rec.status === 'pending') return 'pending';
-      if (rec.status === 'issue') return 'issue';
       if (['accepted', 'delivered'].indexOf(rec.status) >= 0) return 'done';
       if (rec.status === 'shipping') return 'shipping';
       if (rec.status === 'confirmed') {
@@ -63,14 +63,23 @@
       return Math.max(0, Number(x.qty || 0) - Number(x.deliveredQty || 0));
     }
 
+    function openIssuesFor(o) {
+      return (o.acceptanceIssues || []).filter(function (iss) {
+        return (!iss.supplier || iss.supplier === supplier) && (iss.status === 'open' || (!iss.status && !iss.resolvedAt));
+      });
+    }
+
     function card(o) {
       const rec = o.supplierRecords[supplier];
       const items = myItems(o);
       const amount = items.reduce(function (s, x) { return s + Number(x.price || 0) * Number(x.qty || 0); }, 0);
       const toShip = items.reduce(function (s, x) { return s + remaining(x); }, 0);
+      const openIssues = openIssuesFor(o);
       // 结算阶段以订单状态为准，避免"验收完就显示已完成"的误导
       const inSettle = ['settle-pending', 'settle-supplier', 'settle-disputed', 'accepted'].indexOf(o.status) >= 0;
-      const pill = inSettle ? UI.statusPill(o.status) : UI.supplierPill(rec.status);
+      const pill = openIssues.length
+        ? '<span class="pill bad">验收异常 ' + openIssues.length + ' 项</span>'
+        : (inSettle ? UI.statusPill(o.status) : UI.supplierPill(rec.status));
       return '<div class="card card-pad" style="margin-bottom:9px">' +
         '<div class="between"><span class="order-id">' + UI.esc(o.id) + '</span>' + pill + '</div>' +
         '<div class="order-meta">' + UI.esc(o.store || '') + ' · ' + UI.esc(o.receiver || '') + ' · ' + UI.esc(o.address || '') + '</div>' +
@@ -79,12 +88,19 @@
             '<span class="q">×' + x.qty + (remaining(x) > 0 && remaining(x) < x.qty ? '（待发 ' + remaining(x) + '）' : '') + '</span></div>';
         }).join('') +
         ((items.length > 4) ? '<div class="tiny muted">等 ' + items.length + ' 项</div>' : '') +
-        (rec.issue ? '<div class="alert mt8">' + UI.icon('alert', 'sm') + '<span>' + UI.esc(rec.issue) + '</span></div>' : '') +
+        (rec.issue ? '<div class="alert mt8">' + UI.icon('alert', 'sm') + '<span>拒单原因：' + UI.esc(rec.issue) + '</span></div>' : '') +
+        openIssues.map(function (iss) {
+          return '<div class="alert mt8">' + UI.icon('alert', 'sm') +
+            '<span>门店第 ' + (iss.batchNo || 1) + ' 批验收异常：' + UI.esc(iss.note || '') + '</span></div>';
+        }).join('') +
         '<div class="between" style="margin-top:10px;padding-top:9px;border-top:1px dashed var(--line-2)">' +
           '<span class="tiny muted">期望到货 ' + UI.esc(o.due || '待确认') + ' · 我的金额</span>' +
           '<span class="order-amt">¥' + UI.money(amount) + '</span></div>' +
         '<div class="btn-group" style="margin-top:10px">' +
           '<button class="btn ghost sm" data-view="' + UI.esc(o.id) + '">详情</button>' +
+          (openIssues.length
+            ? '<button class="btn danger sm" data-resolve-issue="' + UI.esc(o.id) + '">响应验收异常</button>'
+            : '') +
           (rec.status === 'pending'
             ? '<button class="btn danger sm" data-issue="' + UI.esc(o.id) + '">无法接单</button>' +
               '<button class="btn primary sm" data-ack="' + UI.esc(o.id) + '">确认接单</button>'
@@ -187,7 +203,8 @@
       const order = find(orderId);
       if (!order) return;
       const items = myItems(order).filter(function (x) { return remaining(x) > 0; });
-      let method = 'express';
+      const isActivityService = items.length > 0 && items.every(function (x) { return x.category === '社区活动服务'; });
+      let method = isActivityService ? 'onsite' : 'express';
 
       function shippingFields() {
         if (method === 'express') {
@@ -202,6 +219,9 @@
             '<div class="field"><div class="label">联系人</div>' +
             '<input class="input" id="s-contact" maxlength="30" placeholder="司机 / 骑手联系电话（选填）"></div>';
         }
+        if (method === 'onsite') {
+          return '<div class="note-box">无需快递单号。完成现场活动后登记执行场次，门店上传活动现场照片验收。</div>';
+        }
         return '<div class="field"><div class="label">配送安排 / 联系人<span class="req">*</span></div>' +
           '<input class="input" id="s-contact" maxlength="30" placeholder="例如：自有车辆，张师傅 138xxxx"></div>';
       }
@@ -212,10 +232,10 @@
           '<div class="radio-cards" id="s-methods">' + Object.keys(SHIP).map(function (k) {
             return '<label class="radio-card' + (k === method ? ' on' : '') + '" data-m="' + k + '">' +
               '<span class="rd"></span><span class="grow"><span>' + UI.esc(SHIP[k]) + '</span>' +
-              '<span class="d">' + (k === 'express' ? '需填写快递公司与运单号' : k === 'lalamove' ? '货拉拉等同城货运，需平台单号' : k === 'runner' ? '闪送/跑腿，需平台单号' : '自行安排车辆配送') + '</span></span></label>';
+              '<span class="d">' + (k === 'express' ? '需填写快递公司与运单号' : k === 'lalamove' ? '货拉拉等同城货运，需平台单号' : k === 'runner' ? '闪送/跑腿，需平台单号' : k === 'self' ? '自行安排车辆配送' : '现场活动执行后登记场次，无需物流单号') + '</span></span></label>';
           }).join('') + '</div></div>' +
         '<div id="s-ship-fields">' + shippingFields() + '</div>' +
-        '<div class="field"><div class="label">预计到达</div>' +
+        '<div class="field"><div class="label">' + (isActivityService ? '实际活动日期' : '预计到达') + '</div>' +
           '<input class="input" id="s-eta" type="date" min="' + UI.todayStr() + '"></div>' +
         '<div class="field"><div class="label">本次交付商品<span class="req">*</span></div>' +
           '<div class="ship-lines">' + items.map(function (x) {
@@ -226,10 +246,10 @@
           }).join('') + '</div></div>' +
         '<div class="field"><div class="label">发货备注</div>' +
           '<textarea class="textarea" id="s-note" maxlength="120" placeholder="选填，例如：分两箱发出"></textarea></div>' +
-        '<div class="note-box">发货后订单进入「配送中」，门店验收后才会完结。</div>';
+        '<div class="note-box">' + (isActivityService ? '活动执行完成后，门店以现场照片及活动效果进行验收，不按快递物流处理。' : '发货后订单进入「配送中」，门店验收后才会完结。') + '</div>';
 
       const s = UI.sheet({
-        title: '登记发货',
+        title: isActivityService ? '登记活动执行' : '登记发货',
         sub: UI.esc(order.id) + ' · ' + UI.esc(order.store),
         body: body,
         actions: [
@@ -311,7 +331,51 @@
 
       // 结算金额共同确认：供应商确认 / 查看结算明细
       const se = e.target.closest('[data-settle]');
-      if (se) { App.go('/settle/' + se.dataset.settle); }
+      if (se) { App.go('/settle/' + se.dataset.settle); return; }
+
+      const ri = e.target.closest('[data-resolve-issue]');
+      if (ri) {
+        const orderId = ri.dataset.resolveIssue;
+        const o = find(orderId);
+        const iss = o ? openIssuesFor(o)[0] : null;
+        let plan = 'reship';
+        UI.sheet({
+          title: '响应门店验收异常 · ' + orderId,
+          sub: iss ? ('第 ' + (iss.batchNo || 1) + ' 批异常：' + iss.note) : '选择处理方案并填写说明，门店及中台将同步看到',
+          body:
+            '<div class="field"><div class="label">处理方案<span class="req">*</span></div>' +
+              '<div class="radio-cards" id="ri-plans">' +
+                '<label class="radio-card on" data-p="reship"><span class="rd"></span><span class="grow"><span>安排补发 / 换货</span><span class="d">立即安排补齐或替换破损物资</span></span></label>' +
+                '<label class="radio-card" data-p="discount"><span class="rd"></span><span class="grow"><span>转结算折让</span><span class="d">不再补发，按少收/破损数量在结算环节折让</span></span></label>' +
+                '<label class="radio-card" data-p="resolved"><span class="rd"></span><span class="grow"><span>已沟通协商结案</span><span class="d">已与门店核对完毕，关闭异常提醒</span></span></label>' +
+              '</div></div>' +
+            '<div class="field"><div class="label">处理说明<span class="req">*</span></div>' +
+              '<textarea class="textarea" id="ri-reply" maxlength="300" placeholder="例如：已安排顺丰补发 2 个充电宝，预计明日送达"></textarea></div>',
+          mount: function (bodyEl) {
+            bodyEl.querySelector('#ri-plans').addEventListener('click', function (ev) {
+              const cardEl = ev.target.closest('[data-p]');
+              if (!cardEl) return;
+              plan = cardEl.dataset.p;
+              bodyEl.querySelectorAll('[data-p]').forEach(function (x) { x.classList.toggle('on', x.dataset.p === plan); });
+            });
+          },
+          actions: [
+            { label: '取消', cls: 'ghost' },
+            { label: '提交方案', cls: 'primary', onClick: function (_close, bodyEl) {
+                const reply = bodyEl.querySelector('#ri-reply').value.trim();
+                try {
+                  App.mutate(function (st, ses) {
+                    return domain.resolveAcceptanceIssue(st, ses, {
+                      orderId: orderId, issueId: iss && iss.id, plan: plan, reply: reply
+                    });
+                  });
+                  UI.toast('已登记处理方案', 'good');
+                  render();
+                } catch (err) { UI.toast(err.message, 'error', 2600); return false; }
+              } }
+          ]
+        });
+      }
     });
   };
 })(window.Views);
