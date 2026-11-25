@@ -256,17 +256,26 @@
     lastHash = r.hash;
   }
 
-  /* ---------------- 业务动作 ---------------- */
+  /* ---------------- 业务动作 ----------------
+   * demo 模式：本地直接改 state。
+   * 共享模式：Remote 录制本次调用的 domain 动作，本地先乐观更新保证手感，
+   * 再异步提交给服务端用真实身份重放；服务端返回权威 state 覆盖本地。
+   * 页面调用的签名和返回值完全不变，所以 16 个页面无需改动。
+   */
   function mutate(fn) {
     const st = Store.loadState();
     const me = Session.current();
-    const result = fn(st, me);
+    const R = window.Remote;
+    const before = (R && R.enabled) ? JSON.stringify(st) : '';
+    const out = (R && R.record) ? R.record(st, fn, me) : { result: fn(st, me), calls: [] };
+    const result = out.result;
     Store.saveState(st);
     if (result) {
       if (result.audit) Store.appendAudit([result.audit]);
       if (result.audits) Store.appendAudit(result.audits);
     }
     renderChrome();
+    if (R && R.commit) R.commit(out.calls, before);
     return result;
   }
 
@@ -301,6 +310,9 @@
     const logoEl = document.getElementById('side-logo-img');
     if (logoEl && global.UI) logoEl.src = UI.logoSrc();
     Session.bootstrap().then(function () {
+      // 共享模式：换取身份 + 拉取服务端权威 state；demo 模式立即通过
+      return (window.Remote && Remote.ready) ? Remote.ready() : Promise.resolve(null);
+    }).then(function () {
       // 演示便利：?as=TEST-CENTRAL 可直接以指定身份进入（正式环境不会用到）
       const as = new URLSearchParams(location.search).get('as');
       if (as && !Session.isExternal()) {

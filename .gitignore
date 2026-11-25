@@ -25,3 +25,9 @@ node_modules/
 /README_*.txt
 /README-V*.txt
 /*.sqlite
+
+# 共享试用版数据（默认生成在项目文件夹旁边、仓库之外；防止误拷进版本库）
+/ajly-shared-data/
+/ajly-dev-data/
+credentials.json
+accounts.txt

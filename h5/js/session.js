@@ -170,6 +170,15 @@
     return { state: 'wait', text: wecomChecked ? '已启用，等待企业微信授权' : '检测中' };
   }
 
+  // 共享模式：身份由服务端按访问令牌下发，前端不能自行切换角色
+  function setExternal(p) {
+    external = normalize(p) || p || null;
+    if (external) {
+      try { localStorage.setItem(K_PROFILE, JSON.stringify(external)); } catch (e) { /* ignore */ }
+    }
+    return external;
+  }
+
   function logout() {
     external = null;
     wecomError = '';
@@ -184,6 +193,7 @@
     findById: findById,
     current: current,
     switchTo: switchTo,
+    setExternal: setExternal,
     grouped: grouped,
     scopeOf: scopeOf,
     avatarOf: avatarOf,

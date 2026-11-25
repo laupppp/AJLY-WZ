@@ -116,6 +116,24 @@ npm test                # 产物一致 + 语法检查 + 单元测试
 - [`h5/README.md`](h5/README.md) —— H5 架构、构建机制、企业微信接入、上线替换清单
 - [`HANDOFF_CHATGPT.md`](HANDOFF_CHATGPT.md) —— 交接说明：代码约定、状态机口径、常见改动配方、已知坑
 - [`docs/OPTIMIZATION_GUIDE.md`](docs/OPTIMIZATION_GUIDE.md) —— 流程优化、缺陷修复与中台操作台使用说明
+- [`docs/SHARED_TRIAL_WINDOWS.md`](docs/SHARED_TRIAL_WINDOWS.md) —— **共享试用版**：一台 Windows 电脑 + 门店远程访问（组网 / 内网穿透 / 备案现实 / 风险清单）
+
+## H5 共享模式（多端同一份数据）
+
+`h5/` 默认仍是纯前端演示态（数据存在各自浏览器）。经 `server/app.js` 托管时会自动切到共享模式：
+页面代码不变，业务动作由服务端用真实身份重放，全站一份 SQLite。
+
+```bash
+npm run shared:start     # 启动，默认 http://127.0.0.1:3010/
+npm run shared:backup    # 在线备份
+```
+
+- 服务端同源托管 H5 与 `/api/*`，无需域名、无需跨域配置
+- 身份由 `ajly-shared-data/accounts.txt` 里的令牌决定，前端不能自行切角色
+- `revision` 乐观锁防并发覆盖；写动作失败整体回滚并返回权威 state
+- GitHub Pages / 双击 `standalone.html` 仍是互不干扰的 demo，同一份代码两种模式
+
+详见 [`docs/SHARED_TRIAL_WINDOWS.md`](docs/SHARED_TRIAL_WINDOWS.md)。
 
 ## 共享采购试用版
 

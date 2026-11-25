@@ -53,6 +53,12 @@
     return state;
   }
 
+  // 共享模式：用服务端返回的权威 state 直接覆盖本地缓存（不改变 revision）
+  function replaceState(state) {
+    write(K.state, state);
+    return state;
+  }
+
   function resetState() {
     [K.state, K.drafts, K.audit, K.evidence, K.cart].forEach(function (key) {
       try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
@@ -151,6 +157,7 @@
     ensureState: ensureState,
     loadState: ensureState,
     saveState: saveState,
+    replaceState: replaceState,
     resetState: resetState,
     loadCart: loadCart,
     saveCart: saveCart,

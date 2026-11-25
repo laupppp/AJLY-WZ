@@ -16,6 +16,14 @@ window.APP_CONFIG = {
     entryPath: '/auth/wecom' // 后端换取身份的接口路径
   },
 
+  // 共享试用模式：由 server/app.js 托管时自动置 true（见 REMOTE_FLAG 标记）。
+  // GitHub Pages / 双击 standalone.html 仍走 demo，各设备数据互不相干。
+  remote: {
+    /*REMOTE_FLAG*/enabled: false,
+    apiBase: '',       // 同源 /api，无需域名或跨域配置
+    pollMs: 4000       // 其他人操作后，本机自动同步的间隔
+  },
+
   // 演示环境提示
   demo: true
 };

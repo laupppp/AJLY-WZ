@@ -1033,6 +1033,14 @@ window.APP_CONFIG = {
     entryPath: '/auth/wecom' // 后端换取身份的接口路径
   },
 
+  // 共享试用模式：由 server/app.js 托管时自动置 true（见 REMOTE_FLAG 标记）。
+  // GitHub Pages / 双击 standalone.html 仍走 demo，各设备数据互不相干。
+  remote: {
+    /*REMOTE_FLAG*/enabled: false,
+    apiBase: '',       // 同源 /api，无需域名或跨域配置
+    pollMs: 4000       // 其他人操作后，本机自动同步的间隔
+  },
+
   // 演示环境提示
   demo: true
 };
@@ -4718,6 +4726,12 @@ module.exports = {
     return state;
   }
 
+  // 共享模式：用服务端返回的权威 state 直接覆盖本地缓存（不改变 revision）
+  function replaceState(state) {
+    write(K.state, state);
+    return state;
+  }
+
   function resetState() {
     [K.state, K.drafts, K.audit, K.evidence, K.cart].forEach(function (key) {
       try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
@@ -4816,6 +4830,7 @@ module.exports = {
     ensureState: ensureState,
     loadState: ensureState,
     saveState: saveState,
+    replaceState: replaceState,
     resetState: resetState,
     loadCart: loadCart,
     saveCart: saveCart,
@@ -4830,6 +4845,224 @@ module.exports = {
     isDemo: isDemo,
     setDemo: setDemo,
     usage: usage
+  };
+})(window);
+
+</script>
+<script>
+/* ==== js/remote.js ==== */
+/* 共享模式桥接层
+ *
+ * 放在 biz.js 之后、页面脚本之前加载：把 BIZ.domain 包一层代理，页面顶部
+ * `const domain = BIZ.domain` 拿到的就是代理。App.mutate 执行业务动作时，
+ * 代理把「以 state 为首参的调用」录成 {name, args}，交给服务端用真实身份重放。
+ *
+ * 于是：页面代码一行不改，数据却从「每人一份浏览器缓存」变成「服务端一份 SQLite」，
+ * 权限判定也留在服务端（前端传的身份不被信任）。
+ *
+ * demo 模式（GitHub Pages / 双击 standalone.html）下本层完全不生效。
+ */
+(function (global) {
+  const cfg = (global.APP_CONFIG && APP_CONFIG.remote) || {};
+  const ENABLED = !!cfg.enabled;
+  const API = cfg.apiBase || '';
+  const PREFIX = (global.APP_CONFIG && APP_CONFIG.prefix) || 'anju_h5_';
+  const TOKEN_KEY = PREFIX + 'token';
+
+  let token = '';
+  let recording = null;
+  let busy = false;
+  let profile = null;
+
+  function toast(msg, kind) {
+    if (global.UI && UI.toast) UI.toast(msg, kind || '', 3200);
+    else console.log('[remote] ' + msg);
+  }
+  function auth() { return { Authorization: 'Bearer ' + token }; }
+  function getToken(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+  function setToken(v) { try { localStorage.setItem(TOKEN_KEY, v); } catch (e) { /* ignore */ } }
+
+  /* ---------- 1. 录制代理 ---------- */
+  if (ENABLED && global.BIZ && BIZ.domain) {
+    const raw = BIZ.domain;
+    const wrapped = new Map();
+    BIZ.domain = new Proxy(raw, {
+      get: function (target, key) {
+        const value = target[key];
+        if (typeof value !== 'function') return value;
+        if (wrapped.has(key)) return wrapped.get(key);
+        const proxyFn = function () {
+          const args = [].slice.call(arguments);
+          // 只录制以当前 state 为首参的调用；读函数同样录制，服务端会安全跳过
+          if (recording && args[0] === recording.st) {
+            recording.calls.push({ name: String(key), args: args.slice(2) });
+          }
+          return value.apply(target, args);
+        };
+        wrapped.set(key, proxyFn);
+        return proxyFn;
+      }
+    });
+  }
+
+  function record(st, fn, me) {
+    if (!ENABLED) return { result: fn(st, me), calls: [] };
+    const prev = recording;
+    recording = { st: st, calls: [] };
+    try {
+      return { result: fn(st, me), calls: recording.calls.slice() };
+    } finally {
+      recording = prev;
+    }
+  }
+
+  /* ---------- 2. 服务端状态写入本地缓存 ---------- */
+  function applyState(state) {
+    if (!state) return;
+    if (global.Store && Store.replaceState) Store.replaceState(state);
+  }
+
+  /* ---------- 3. 提交动作 ---------- */
+  function commit(calls, beforeSnapshot) {
+    if (!ENABLED || !calls || !calls.length) return;
+    busy = true;
+    const rev = (global.Store && Store.loadState().revision) || 0;
+    return fetch(API + '/api/action', {
+      method: 'POST',
+      headers: Object.assign(auth(), { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ revision: rev - 1, calls: calls })
+    }).then(function (r) {
+      if (r.status === 401) throw new Error('访问令牌已失效，请重新登录');
+      return r.json();
+    }).then(function (data) {
+      if (data.state) applyState(data.state);
+      if (data.error) {
+        toast(data.error, 'warn');
+      }
+      // 成功或拒绝后都用服务端权威 state 重绘，保证各端一致
+      if (global.App && App.reload) App.reload();
+    }).catch(function (err) {
+      // 服务端不可达：撤销本次乐观修改，避免本地与服务端长期分叉
+      try { applyState(JSON.parse(beforeSnapshot)); } catch (e) { /* ignore */ }
+      toast('连不上服务端，本次操作已撤销：' + (err.message || '网络错误'), 'warn');
+      if (global.App && App.reload) App.reload();
+    }).then(function () { busy = false; });
+  }
+
+  /* ---------- 4. 拉取最新状态 ---------- */
+  function pull(force) {
+    if (!ENABLED || !token) return Promise.resolve(null);
+    let url = API + '/api/state';
+    if (!force) url += '?since=' + ((global.Store && Store.loadState().revision) || 0);
+    return fetch(url, { headers: auth() })
+      .then(function (r) {
+        if (r.status === 401) throw new Error('访问令牌已失效');
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data.state) return null;
+        applyState(data.state);
+        return data.state;
+      });
+  }
+
+  /* ---------- 5. 登录遮罩 ---------- */
+  function showLogin(message) {
+    const host = document.createElement('div');
+    host.id = 'remote-login';
+    host.setAttribute('style', 'position:fixed;inset:0;z-index:99999;background:#f3f6fa;display:flex;align-items:center;justify-content:center;padding:20px;font:15px/1.6 system-ui,-apple-system,sans-serif;color:#17253a');
+    host.innerHTML =
+      '<div style="width:100%;max-width:420px;background:#fff;border:1px solid #dce4ee;border-radius:14px;padding:28px">' +
+      '<div style="font-size:19px;font-weight:600;margin-bottom:6px">安居乐寓物资采购</div>' +
+      '<div style="color:#66788f;font-size:13px;margin-bottom:20px">共享试用版 · 请输入管理员发给你的访问令牌</div>' +
+      (message ? '<div style="background:#fff3f3;color:#a32d2d;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px">' + String(message).replace(/</g, '&lt;') + '</div>' : '') +
+      '<input id="remote-token" type="password" placeholder="粘贴访问令牌" autocomplete="off" style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #9aaabc;border-radius:8px;font-size:15px;margin-bottom:12px" />' +
+      '<button id="remote-login-btn" style="width:100%;padding:11px;border:0;border-radius:8px;background:#164e87;color:#fff;font-size:15px;cursor:pointer">进入系统</button>' +
+      '<div style="color:#92a1b3;font-size:12px;margin-top:14px">身份由服务端按令牌判定，进入后不能自行切换角色。</div>' +
+      '</div>';
+    (document.body || document.documentElement).appendChild(host);
+    const input = document.getElementById('remote-token');
+    const submit = function () {
+      const v = (input.value || '').trim().replace(/^Bearer\s+/i, '');
+      if (!v) { input.focus(); return; }
+      setToken(v);
+      location.reload();
+    };
+    document.getElementById('remote-login-btn').onclick = submit;
+    input.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
+    input.focus();
+  }
+
+  /* ---------- 6. 启动 ---------- */
+  function ready() {
+    if (!ENABLED) return Promise.resolve(null);
+
+    // 支持一次性链接：?token=xxxx（管理员可直接把带令牌的链接发给门店）
+    const fromUrl = new URLSearchParams(location.search).get('token');
+    if (fromUrl) {
+      setToken(fromUrl.trim().replace(/^Bearer\s+/i, ''));
+      try {
+        const u = new URL(location.href);
+        u.searchParams.delete('token');
+        history.replaceState(null, '', u.toString());
+      } catch (e) { /* ignore */ }
+    }
+    token = getToken(TOKEN_KEY);
+    if (!token) {
+      showLogin('');
+      return new Promise(function () { /* 登录成功后整页重载，这里刻意不 resolve */ });
+    }
+
+    return fetch(API + '/api/account', { headers: auth() })
+      .then(function (r) {
+        if (r.status === 401) throw new Error('访问令牌无效，请向管理员索取');
+        return r.json();
+      })
+      .then(function (data) {
+        profile = data.profile;
+        if (global.Session && Session.setExternal) Session.setExternal(profile);
+        return pull(true);
+      })
+      .then(function () {
+        if (global.App && App.reload) App.reload();
+        startPolling();
+        return profile;
+      })
+      .catch(function (err) {
+        setToken('');
+        showLogin(err.message || '连不上服务端');
+        return new Promise(function () { /* 同上 */ });
+      });
+  }
+
+  function startPolling() {
+    const ms = Number(cfg.pollMs || 4000);
+    setInterval(function () {
+      if (busy || document.hidden || profile == null) return;
+      pull(false).then(function (state) {
+        if (state && global.App && App.reload) {
+          App.reload();
+          toast('已同步到其他人的最新操作');
+        }
+      }).catch(function () { /* 离线时静默，不打扰使用 */ });
+    }, ms);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden || busy) return;
+      pull(false).then(function (state) { if (state && global.App && App.reload) App.reload(); }).catch(function () {});
+    });
+  }
+
+  global.Remote = {
+    enabled: ENABLED,
+    ready: ready,
+    record: record,
+    commit: commit,
+    pull: pull,
+    token: function () { return token; },
+    logout: function () {
+      setToken('');
+      location.reload();
+    }
   };
 })(window);
 
@@ -5008,6 +5241,15 @@ module.exports = {
     return { state: 'wait', text: wecomChecked ? '已启用，等待企业微信授权' : '检测中' };
   }
 
+  // 共享模式：身份由服务端按访问令牌下发，前端不能自行切换角色
+  function setExternal(p) {
+    external = normalize(p) || p || null;
+    if (external) {
+      try { localStorage.setItem(K_PROFILE, JSON.stringify(external)); } catch (e) { /* ignore */ }
+    }
+    return external;
+  }
+
   function logout() {
     external = null;
     wecomError = '';
@@ -5022,6 +5264,7 @@ module.exports = {
     findById: findById,
     current: current,
     switchTo: switchTo,
+    setExternal: setExternal,
     grouped: grouped,
     scopeOf: scopeOf,
     avatarOf: avatarOf,
@@ -10679,17 +10922,26 @@ module.exports = {
     lastHash = r.hash;
   }
 
-  /* ---------------- 业务动作 ---------------- */
+  /* ---------------- 业务动作 ----------------
+   * demo 模式：本地直接改 state。
+   * 共享模式：Remote 录制本次调用的 domain 动作，本地先乐观更新保证手感，
+   * 再异步提交给服务端用真实身份重放；服务端返回权威 state 覆盖本地。
+   * 页面调用的签名和返回值完全不变，所以 16 个页面无需改动。
+   */
   function mutate(fn) {
     const st = Store.loadState();
     const me = Session.current();
-    const result = fn(st, me);
+    const R = window.Remote;
+    const before = (R && R.enabled) ? JSON.stringify(st) : '';
+    const out = (R && R.record) ? R.record(st, fn, me) : { result: fn(st, me), calls: [] };
+    const result = out.result;
     Store.saveState(st);
     if (result) {
       if (result.audit) Store.appendAudit([result.audit]);
       if (result.audits) Store.appendAudit(result.audits);
     }
     renderChrome();
+    if (R && R.commit) R.commit(out.calls, before);
     return result;
   }
 
@@ -10724,6 +10976,9 @@ module.exports = {
     const logoEl = document.getElementById('side-logo-img');
     if (logoEl && global.UI) logoEl.src = UI.logoSrc();
     Session.bootstrap().then(function () {
+      // 共享模式：换取身份 + 拉取服务端权威 state；demo 模式立即通过
+      return (window.Remote && Remote.ready) ? Remote.ready() : Promise.resolve(null);
+    }).then(function () {
       // 演示便利：?as=TEST-CENTRAL 可直接以指定身份进入（正式环境不会用到）
       const as = new URLSearchParams(location.search).get('as');
       if (as && !Session.isExternal()) {
