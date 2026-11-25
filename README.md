@@ -116,3 +116,22 @@ npm test                # 产物一致 + 语法检查 + 单元测试
 - [`h5/README.md`](h5/README.md) —— H5 架构、构建机制、企业微信接入、上线替换清单
 - [`HANDOFF_CHATGPT.md`](HANDOFF_CHATGPT.md) —— 交接说明：代码约定、状态机口径、常见改动配方、已知坑
 - [`docs/OPTIMIZATION_GUIDE.md`](docs/OPTIMIZATION_GUIDE.md) —— 流程优化、缺陷修复与中台操作台使用说明
+
+## 共享采购试用版
+
+使用 Node.js 26 LTS。在仓库根目录运行 `node server/dev.js`，打开
+`http://127.0.0.1:3000/`。测试令牌首次启动时写入仓库旁边
+`ajly-dev-data` 目录中的 `dev-credentials.json` 和
+`workflow-credentials.json`。使用虚构数据测试门店切换、下单、审批、
+配送、带照片验收、结算和对账。原 H5 和小程序仍提供独立的演示体验。
+
+运行 `node server/dev.js backup` 创建并检查 SQLite 在线备份。
+可通过 `AJLY_DEV_DATA` 指定独立数据目录。请将数据库、凭证与备份保存在版本库之外。
+
+Windows 内网试用需设置 `AJLY_LAN_TRIAL=1`、`AJLY_LAN_HOST`、
+`AJLY_LAN_CIDR` 和 `AJLY_DEV_PORT`，并在 Windows 防火墙中仅放行
+对应程序、端口和已授权网段。管理员可运行 `server/register-tasks.ps1`
+并传入 `AccountSid`、`LanHost`、`LanCidr`，注册 3012 端口的开机任务和
+凌晨 2 点的本地备份任务。该脚本以指定 Windows 账号的普通权限运行任务。
+
+试用版使用测试令牌。企业微信身份认证、员工正式账号和生产 HTTPS 入口仍待接入。
