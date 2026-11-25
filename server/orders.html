@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>安居乐寓采购 · 共享订单测试</title>
+<style>
+body{font:16px/1.6 system-ui,sans-serif;background:#f3f6fa;color:#17253a;margin:0}
+main{max-width:48rem;margin:auto;padding:2rem 1rem}
+section{background:white;border:1px solid #dce4ee;border-radius:12px;padding:1.25rem;margin-bottom:1rem}
+[hidden]{display:none} form{display:grid;gap:.75rem} label{display:grid;gap:.25rem}
+input,select,button{font:inherit;padding:.5rem;border:1px solid #9aaabc;border-radius:6px}
+button{background:#164e87;color:white;width:fit-content;cursor:pointer}
+button:disabled{opacity:.6} h2{margin-top:0} #status{min-height:1.6em}
+</style>
+<main>
+<h1>安居乐寓采购</h1>
+<p>共享订单测试 · 请使用虚构资料</p>
+<section aria-labelledby="account">
+<h2 id="account">测试账号</h2>
+<label>访问令牌<input id="token" type="password" autocomplete="off" required></label><button type="button" id="load-account">加载账号权限</button>
+</section>
+<section aria-labelledby="create" id="store-panel" hidden>
+<h2 id="create">门店下单</h2>
+<form id="order">
+<label>当前门店<select name="store" required></select></label>
+<label>物资编号<input name="item" value="OP-001" required></label>
+<label>数量<input name="quantity" type="number" min="1" step="1" value="1" required></label>
+<label>收货地址<input name="address" required></label>
+<label>收货人<input name="receiver" required></label>
+<button type="submit">提交订单</button>
+</form>
+</section>
+<section aria-labelledby="query">
+<h2 id="query">共享订单</h2>
+<button type="button" id="refresh">查询订单</button>
+<p id="status" role="status"></p>
+<ul id="orders"></ul>
+</section>
+<section aria-labelledby="workflow-title">
+<h2 id="workflow-title">采购流程测试</h2>
+<form id="workflow">
+<label>操作<select name="step">
+<option value="approve">审批通过</option>
+<option value="supplier-ack">供应商接单</option>
+<option value="deliver">登记发货</option>
+<option value="accept">门店验收</option>
+<option value="settlement">提交结算金额</option>
+<option value="settlement-confirm">供应商确认结算</option>
+<option value="reconciliation">中台生成对账单</option>
+<option value="reconciliation-confirm">供应商确认对账</option>
+<option value="reconciliation-lock">中台锁定对账单</option>
+</select></label>
+<label data-for="approve supplier-ack deliver accept settlement settlement-confirm">订单号<input name="orderId" required></label>
+<label data-for="approve">当前审批阶段<select name="stage">
+<option value="order-review">战区审核</option>
+<option value="amount-approval">金额审批</option>
+<option value="budget-region">战区预算审批</option>
+<option value="budget-central">中台预算核定</option>
+</select></label>
+<label data-for="deliver accept">物资编号<input name="item" value="OP-001" required></label>
+<label data-for="deliver accept">数量<input name="qty" type="number" min="1" step="1" value="1" required></label>
+<label data-for="deliver">配送联系人<input name="contact" required></label>
+<label data-for="accept">发货批次<input name="batchNo" type="number" min="1" step="1" value="1" required></label>
+<label data-for="accept">验收照片<input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+<label data-for="accept"><span><input name="specChecked" type="checkbox" required> 已核对实物规格</span></label>
+<label data-for="settlement">结算金额<input name="amount" type="number" min="0" step="0.01" required></label>
+<label data-for="settlement">金额调整原因<input name="reason"></label>
+<label data-for="reconciliation">对账月份<input name="period" type="month" required></label>
+<label data-for="reconciliation-confirm reconciliation-lock">对账单号<input name="reconId" required></label>
+<button type="submit">执行操作</button>
+<p id="workflow-status" role="status"></p>
+</form>
+</section>
+</main>
+<script>
+const token = document.querySelector('#token');
+const form = document.querySelector('#order');
+const refresh = document.querySelector('#refresh');
+const status = document.querySelector('#status');
+const orders = document.querySelector('#orders');
+const submit = form.querySelector('button');
+const store = form.elements.store;
+const storePanel = document.querySelector('#store-panel');
+const loadAccount = document.querySelector('#load-account');
+let authenticatedCredential = '';
+
+async function selectAccount(credential) {
+  if (authenticatedCredential === credential) return;
+  const account = await api('GET', credential, undefined, '/api/account');
+  const options = account.stores.map(name => new Option(name, name));
+  store.replaceChildren(...options);
+  storePanel.hidden = account.role !== 'store' || !options.length;
+  authenticatedCredential = credential;
+}
+
+async function api(method, credential, payload, url = '/api/orders') {
+  const response = await fetch(url, {
+    method,
+    headers: { Authorization: 'Bearer ' + credential, 'Content-Type': 'application/json' },
+    body: payload ? JSON.stringify(payload) : undefined
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('访问令牌无效');
+    if (response.status === 403) throw new Error('此账号没有执行该操作的权限');
+    throw new Error(result.error || '订单请求失败');
+  }
+  return result;
+}
+
+async function run(payload) {
+  if (!token.reportValidity()) return;
+  refresh.disabled = submit.disabled = token.disabled = loadAccount.disabled = store.disabled = true;
+  orders.replaceChildren();
+  status.textContent = '正在连接共享数据库…';
+  let created;
+  try {
+    const credential = token.value.trim();
+    await selectAccount(credential);
+    if (payload) created = await api('POST', credential, payload);
+    const filter = storePanel.hidden ? '' : '?store=' + encodeURIComponent(store.value);
+    const rows = await api('GET', credential, undefined, '/api/orders' + filter);
+    for (const row of rows) {
+      const entry = document.createElement('li');
+      entry.textContent = row.id + ' · ' + row.store + ' · ' + (orderStages[row.status] || row.status) + (row.total == null ? '' : ' · ¥' + row.total);
+      orders.append(entry);
+    }
+    status.textContent = (created ? '已提交 ' + created.id + '。' : '') + '共 ' + rows.length + ' 笔订单。';
+  } catch (error) {
+    status.textContent = (created ? '已提交 ' + created.id + '，查询失败。' : '') + error.message;
+  } finally {
+    refresh.disabled = submit.disabled = token.disabled = loadAccount.disabled = store.disabled = false;
+  }
+}
+
+token.addEventListener('input', () => {
+  authenticatedCredential = '';
+  storePanel.hidden = true;
+  store.replaceChildren();
+  orders.replaceChildren();
+  status.textContent = '';
+});
+refresh.addEventListener('click', () => run());
+loadAccount.addEventListener('click', () => run());
+store.addEventListener('change', () => run());
+form.addEventListener('submit', event => {
+  event.preventDefault();
+  const fields = new FormData(form);
+  run({
+    store: fields.get('store'),
+    items: [{ id: fields.get('item').trim(), qty: Number(fields.get('quantity')) }],
+    details: { address: fields.get('address'), receiver: fields.get('receiver') }
+  });
+});
+const orderStages = {
+  'order-review': '待战区审核', 'amount-approval': '待金额审批',
+  'budget-region': '待战区预算审批', 'budget-central': '待中台预算核定',
+  supplier: '待接单', preparing: '待发货', delivering: '待验收',
+  'settle-pending': '待提交结算', 'settle-supplier': '待供应商确认结算',
+  accepted: '待对账', done: '已完成'
+};
+const workflow = document.querySelector('#workflow');
+const workflowStatus = document.querySelector('#workflow-status');
+const vendor = '运营物资供应商（演示）';
+
+function showFields() {
+  for (const field of workflow.querySelectorAll('[data-for]')) {
+    field.hidden = !field.dataset.for.split(' ').includes(workflow.elements.step.value);
+    field.querySelector('input,select').disabled = field.hidden;
+  }
+}
+
+async function photoData(photo) {
+  if (photo.size > 1000000) throw new Error('验收照片需小于或等于 1 MB');
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('无法读取验收照片'));
+    reader.readAsDataURL(photo);
+  });
+}
+
+async function workflowBody(step, fields) {
+  const orderId = fields.get('orderId');
+  const lines = [{ id: fields.get('item'), qty: Number(fields.get('qty')) }];
+  switch (step) {
+    case 'approve': return { orderId, stage: fields.get('stage'), pass: true };
+    case 'supplier-ack':
+    case 'settlement-confirm': return { orderId, action: 'confirm' };
+    case 'deliver': return { orderId, lines, shipping: { method: 'self', contact: fields.get('contact') } };
+    case 'accept': return {
+      orderId, lines, supplier: vendor, batchNo: Number(fields.get('batchNo')),
+      result: 'pass', specChecked: fields.has('specChecked'), photoPath: await photoData(fields.get('photo'))
+    };
+    case 'settlement': return { orderId, amount: Number(fields.get('amount')), reason: fields.get('reason') };
+    case 'reconciliation': return { supplier: vendor, period: fields.get('period') };
+    case 'reconciliation-confirm':
+    case 'reconciliation-lock': return {
+      reconId: fields.get('reconId'), action: step.split('-')[1]
+    };
+  }
+}
+
+workflow.elements.step.addEventListener('change', showFields);
+showFields();
+workflow.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!token.reportValidity()) return;
+  const fields = new FormData(workflow);
+  const step = fields.get('step');
+  const route = ['reconciliation-confirm', 'reconciliation-lock'].includes(step) ? 'reconciliation-update' : step;
+  const button = workflow.querySelector('button');
+  button.disabled = true;
+  workflowStatus.textContent = '正在提交…';
+  try {
+    const credential = token.value.trim();
+    const result = await api('POST', credential, await workflowBody(step, fields), '/api/workflow/' + route);
+    const ref = result.reconciliation || result.order;
+    workflowStatus.textContent = ref ? '操作成功 · ' + ref.id : '操作成功';
+  } catch (error) {
+    workflowStatus.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+</script>
+</html>
