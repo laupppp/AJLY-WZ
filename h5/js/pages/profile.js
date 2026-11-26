@@ -103,6 +103,14 @@
         '<div class="tiny muted" style="text-align:center;margin-top:8px">重置会清空本机订单、草稿与照片，恢复为初始 12 笔演示订单</div>' +
       '</div>' +
 
+      (typeof Remote !== 'undefined' && Remote.enabled
+        ? '<div class="card card-pad mt12">' +
+            '<div class="section-title mb8">账号</div>' +
+            '<div class="tiny muted" style="margin-bottom:10px">当前身份：' + UI.esc(me.name) + '（' + UI.esc(me.id) + '）</div>' +
+            '<button class="btn ghost block" id="remote-logout">退出登录 / 切换账号</button>' +
+          '</div>'
+        : '') +
+
       '<div class="card card-pad mt12">' +
         '<div class="section-title mb8">关于</div>' +
         '<div class="kv"><span class="k">系统</span><span class="v">' + UI.esc(APP_CONFIG.brand) + '</span></div>' +
@@ -130,5 +138,18 @@
         App.go('/home');
       });
     };
+
+    const logoutBtn = root.querySelector('#remote-logout');
+    if (logoutBtn) {
+      logoutBtn.onclick = function () {
+        UI.confirm({
+          title: '退出登录？',
+          sub: '退出后可以用其他账号密码或令牌重新进入，数据不会丢失。',
+          okText: '退出'
+        }).then(function (ok) {
+          if (ok && typeof Remote !== 'undefined' && Remote.logout) Remote.logout();
+        });
+      };
+    }
   };
 })(window.Views);
