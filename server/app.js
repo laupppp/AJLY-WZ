@@ -19,7 +19,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync, backup } = require('node:sqlite');
 const domain = require('../miniprogram/utils/domain');
-const { SEED_STATE, STAFF, SUPPLIERS } = require('../miniprogram/data/seed');
+const { SEED_STATE } = require('../miniprogram/data/seed');
+const { CONTRACTS_DEFAULT } = require('../miniprogram/data/rules');
+const identity = require('./identity');
 
 const ROOT = path.resolve(__dirname, '..');
 const H5 = path.join(ROOT, 'h5');
@@ -51,95 +53,22 @@ DB.prepare('INSERT OR IGNORE INTO shared_state VALUES (1, ?)').run(JSON.stringif
 const load = () => JSON.parse(DB.prepare('SELECT body FROM shared_state WHERE id = 1').get().body);
 const save = (s) => DB.prepare('UPDATE shared_state SET body = ? WHERE id = 1').run(JSON.stringify(s));
 
-/* ---------- 身份与访问令牌 ---------- */
-const DEPARTMENT_DEMO = {
-  id: 'TEST-DEPT-01', name: '职能部门采购员', short: '职能部门', role: 'department',
-  department: '人力资源部', zone: null, stores: [],
-  desc: '职能部门采购（企业微信接入后按通讯录部门识别）'
-};
+/* ---------- 身份 / 授权分离（账号与权限各自独立维护） ---------- */
+const CONTRACT_SUPPLIER = {};
+(CONTRACTS_DEFAULT || []).forEach(function (c) {
+  if (c && c.id && c.supplier) CONTRACT_SUPPLIER[c.id] = c.supplier;
+});
+const IDX = identity.buildIndex(DATA, { contractSupplier: CONTRACT_SUPPLIER });
+const BY_ID = IDX.BY_ID;
+const ACTORS = IDX.ACTORS;
+const TOKEN_BY_ID = IDX.TOKEN_BY_ID;
+const USERS = IDX.USERS;
+const loginFails = new Map();
 
-function profiles() {
-  const list = STAFF.map(function (x) {
-    const p = Object.assign({ short: x.name }, x);
-    if (p.role === 'central' && !p.department) p.department = '运营管理部';
-    return Object.assign({ fromWecom: true }, p);
-  });
-  list.push(Object.assign({ fromWecom: true }, DEPARTMENT_DEMO));
-  SUPPLIERS.forEach(function (name, i) {
-    list.push({
-      id: 'TEST-SUPPLIER-' + (i + 1), name: name, short: name, role: 'supplier',
-      supplier: name, zone: null, stores: [], fromWecom: true,
-      desc: '外部供应商账号 · 仅接单 / 发货 / 结算确认'
-    });
-  });
-  return list;
-}
-
-const BY_ID = new Map(profiles().map(function (p) { return [p.id, p]; }));
-const credPath = path.join(DATA, 'credentials.json');
-if (!fs.existsSync(credPath)) {
-  const creds = {};
-  profiles().forEach(function (p) { creds['Bearer ' + crypto.randomBytes(24).toString('hex')] = p.id; });
-  fs.writeFileSync(credPath, JSON.stringify(creds, null, 2), { flag: 'wx', mode: 0o600 });
-}
-const CREDENTIALS = JSON.parse(fs.readFileSync(credPath, 'utf8'));
-const ACTORS = new Map(Object.keys(CREDENTIALS).map(function (token) {
-  return [token, BY_ID.get(CREDENTIALS[token])];
-}).filter(function (pair) { return !!pair[1]; }));
-const TOKEN_BY_ID = new Map(Object.keys(CREDENTIALS).map(function (token) {
-  return [CREDENTIALS[token], token.replace(/^Bearer\s+/, '')];
-}));
-
-/* ---------- 账号密码登录（不依赖企微可信域名） ---------- */
-const usersPath = path.join(DATA, 'users.json');
-const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-function randomPassword() {
-  let out = '';
-  for (let i = 0; i < 8; i++) out += PASSWORD_CHARS[crypto.randomInt(PASSWORD_CHARS.length)];
-  return out;
-}
 function hashPassword(password, salt) {
   return crypto.scryptSync(String(password), salt, 32).toString('hex');
 }
-if (!fs.existsSync(usersPath)) {
-  const users = {};
-  BY_ID.forEach(function (p, id) {
-    const token = TOKEN_BY_ID.get(id);
-    if (!token) return;
-    const salt = crypto.randomBytes(16).toString('hex');
-    const password = randomPassword();
-    users[id.toLowerCase()] = {
-      id: id, salt: salt, hash: hashPassword(password, salt), password: password
-    };
-  });
-  fs.writeFileSync(usersPath, JSON.stringify(users, null, 2), { flag: 'wx', mode: 0o600 });
-}
-const USERS = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
-const loginFails = new Map();
-
-function writeAccountSheet() {
-  const lines = [
-    '安居乐寓物资采购 · 试点账号（用户名 + 密码）',
-    '生成时间：' + new Date().toLocaleString('zh-CN'),
-    '请把「姓名 + 用户名 + 密码」单独发给对应人员，不要把本文件发到群里。',
-    '门店用手机浏览器打开系统地址，用用户名 + 密码登录；token 仍可作为备用方式。',
-    ''
-  ];
-  Object.keys(USERS).forEach(function (username) {
-    const u = USERS[username];
-    const p = BY_ID.get(u.id);
-    if (!p) return;
-    lines.push(p.name + '　[' + p.role + ']　id=' + p.id);
-    lines.push('  用户名: ' + username);
-    lines.push('  密码: ' + (u.password || '（见首次生成记录）'));
-    lines.push('  token（备用）: ' + (TOKEN_BY_ID.get(p.id) || ''));
-    if (p.role === 'store') lines.push('  可下单门店: ' + (p.stores || []).join('、'));
-    if (p.role === 'supplier') lines.push('  供应商: ' + p.supplier);
-    lines.push('');
-  });
-  fs.writeFileSync(path.join(DATA, 'accounts.txt'), lines.join('\n'), { mode: 0o600 });
-}
-writeAccountSheet();
+identity.writeAccountSheet(DATA, IDX);
 
 /* ---------- 只允许重放的动作 ----------
  * 白名单里的调用一旦抛错就整体回滚（多半是权限不足或业务规则拦截）；
@@ -270,6 +199,7 @@ async function handler(req, res) {
       return send(res, 429, { error: '尝试次数过多，请 1 分钟后再试' });
     }
     const u = USERS[username];
+    if (u && u.active === false) return send(res, 403, { error: '该账号已' + (u.status || '停用') + '，请联系管理员' });
     const ok = !!u && (function () {
       const a = Buffer.from(hashPassword(password, u.salt), 'hex');
       const b = Buffer.from(u.hash, 'hex');
@@ -281,9 +211,10 @@ async function handler(req, res) {
       return send(res, 401, { error: '用户名或密码错误' });
     }
     loginFails.delete(key);
+    const profile = BY_ID.get(u.id);
     const raw = TOKEN_BY_ID.get(u.id);
-    if (!raw) return send(res, 401, { error: '该账号未分配令牌，请联系管理员' });
-    return send(res, 200, { token: raw, profile: BY_ID.get(u.id) });
+    if (!raw || !profile) return send(res, 403, { error: '该账号当前无有效授权，请联系管理员' });
+    return send(res, 200, { token: raw, profile: profile });
   }
   if (!pathname.startsWith('/api/')) return serveStatic(req, res, pathname);
 
