@@ -86,20 +86,53 @@ const CREDENTIALS = JSON.parse(fs.readFileSync(credPath, 'utf8'));
 const ACTORS = new Map(Object.keys(CREDENTIALS).map(function (token) {
   return [token, BY_ID.get(CREDENTIALS[token])];
 }).filter(function (pair) { return !!pair[1]; }));
+const TOKEN_BY_ID = new Map(Object.keys(CREDENTIALS).map(function (token) {
+  return [CREDENTIALS[token], token.replace(/^Bearer\s+/, '')];
+}));
+
+/* ---------- 账号密码登录（不依赖企微可信域名） ---------- */
+const usersPath = path.join(DATA, 'users.json');
+const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function randomPassword() {
+  let out = '';
+  for (let i = 0; i < 8; i++) out += PASSWORD_CHARS[crypto.randomInt(PASSWORD_CHARS.length)];
+  return out;
+}
+function hashPassword(password, salt) {
+  return crypto.scryptSync(String(password), salt, 32).toString('hex');
+}
+if (!fs.existsSync(usersPath)) {
+  const users = {};
+  BY_ID.forEach(function (p, id) {
+    const token = TOKEN_BY_ID.get(id);
+    if (!token) return;
+    const salt = crypto.randomBytes(16).toString('hex');
+    const password = randomPassword();
+    users[id.toLowerCase()] = {
+      id: id, salt: salt, hash: hashPassword(password, salt), password: password
+    };
+  });
+  fs.writeFileSync(usersPath, JSON.stringify(users, null, 2), { flag: 'wx', mode: 0o600 });
+}
+const USERS = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+const loginFails = new Map();
 
 function writeAccountSheet() {
   const lines = [
-    '安居乐寓物资采购 · 试点访问令牌',
+    '安居乐寓物资采购 · 试点账号（用户名 + 密码）',
     '生成时间：' + new Date().toLocaleString('zh-CN'),
-    '请把「姓名 + token」单独发给对应人员，不要把本文件发到群里。',
-    '门店用手机浏览器打开系统地址，粘贴 token 即可登录，身份由服务端决定。',
+    '请把「姓名 + 用户名 + 密码」单独发给对应人员，不要把本文件发到群里。',
+    '门店用手机浏览器打开系统地址，用用户名 + 密码登录；token 仍可作为备用方式。',
     ''
   ];
-  Object.keys(CREDENTIALS).forEach(function (token) {
-    const p = BY_ID.get(CREDENTIALS[token]);
+  Object.keys(USERS).forEach(function (username) {
+    const u = USERS[username];
+    const p = BY_ID.get(u.id);
     if (!p) return;
     lines.push(p.name + '　[' + p.role + ']　id=' + p.id);
-    lines.push('  token: ' + token.replace(/^Bearer /, ''));
+    lines.push('  用户名: ' + username);
+    lines.push('  密码: ' + (u.password || '（见首次生成记录）'));
+    lines.push('  token（备用）: ' + (TOKEN_BY_ID.get(p.id) || ''));
     if (p.role === 'store') lines.push('  可下单门店: ' + (p.stores || []).join('、'));
     if (p.role === 'supplier') lines.push('  供应商: ' + p.supplier);
     lines.push('');
@@ -128,7 +161,7 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon', '.md': 'text/plain; charset=utf-8'
+  '.ico': 'image/x-icon', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8'
 };
 
 function send(res, status, value, type) {
@@ -223,6 +256,35 @@ async function handler(req, res) {
   const pathname = url.pathname;
 
   if (pathname === '/api/health') return send(res, 200, { ok: true, revision: load().revision });
+  if (pathname === '/api/login' && req.method === 'POST') {
+    let body;
+    try { body = await readBody(req, 64 * 1024); }
+    catch (e) { return send(res, 400, { error: '请求不是合法 JSON' }); }
+    const username = String(body.username || '').trim().toLowerCase();
+    const password = String(body.password || '');
+    const now = Date.now();
+    const key = (req.socket.remoteAddress || '') + ':' + username;
+    const fails = (loginFails.get(key) || []).filter(function (t) { return now - t < 60000; });
+    if (fails.length >= 5) {
+      loginFails.set(key, fails);
+      return send(res, 429, { error: '尝试次数过多，请 1 分钟后再试' });
+    }
+    const u = USERS[username];
+    const ok = !!u && (function () {
+      const a = Buffer.from(hashPassword(password, u.salt), 'hex');
+      const b = Buffer.from(u.hash, 'hex');
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    })();
+    if (!ok) {
+      fails.push(now);
+      loginFails.set(key, fails);
+      return send(res, 401, { error: '用户名或密码错误' });
+    }
+    loginFails.delete(key);
+    const raw = TOKEN_BY_ID.get(u.id);
+    if (!raw) return send(res, 401, { error: '该账号未分配令牌，请联系管理员' });
+    return send(res, 200, { token: raw, profile: BY_ID.get(u.id) });
+  }
   if (!pathname.startsWith('/api/')) return serveStatic(req, res, pathname);
 
   const actor = ACTORS.get(req.headers.authorization || '');

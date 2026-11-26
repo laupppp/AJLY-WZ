@@ -1,9 +1,9 @@
 /* 自动生成，请勿直接修改。
  * 来源：miniprogram/{utils,data}/*.js（纯逻辑模块）
  * 重新生成：node h5/build-biz.js
- * 生成时间：2026-11-25T16:09:48.365Z
+ * 生成时间：2026-11-26T06:32:17.647Z
  * 模块：data/activity-services, data/budget, data/catalog, data/rules, data/seed, data/subcats, utils/domain, utils/format, utils/perm
- * 源文件指纹：ecc322b291a88908
+ * 源文件指纹：28d5fca07d0cfa27
  */
 (function (global) {
   var defs = {};
