@@ -1,4 +1,4 @@
-# 注册两个 Windows 计划任务：登录后自动启动服务、每天凌晨 2 点备份数据库
+﻿# 注册两个 Windows 计划任务：登录后自动启动服务、每天凌晨 2 点备份数据库
 # 用法（管理员 PowerShell）：
 #   powershell -ExecutionPolicy Bypass -File .\server\setup-tasks.ps1
 $ErrorActionPreference = 'Stop'
