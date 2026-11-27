@@ -22,6 +22,7 @@ const domain = require('../miniprogram/utils/domain');
 const { SEED_STATE } = require('../miniprogram/data/seed');
 const { CONTRACTS_DEFAULT } = require('../miniprogram/data/rules');
 const identity = require('./identity');
+const wecom = require('./wecom');
 
 const ROOT = path.resolve(__dirname, '..');
 const H5 = path.join(ROOT, 'h5');
@@ -185,6 +186,83 @@ async function handler(req, res) {
   const pathname = url.pathname;
 
   if (pathname === '/api/health') return send(res, 200, { ok: true, revision: load().revision });
+
+  /* 企业微信扫码登录（经 IT 中转服务）——登录入口，不需要 Bearer 令牌 */
+  if (pathname === '/login/wecom' && req.method === 'GET') {
+    if (!wecom.configured(DATA)) return send(res, 503, { error: '扫码登录尚未配置密钥，请联系管理员' }, 'application/json; charset=utf-8');
+    const state = wecom.newState();
+    res.writeHead(302, {
+      'Location': wecom.loginUrl(state),
+      'Set-Cookie': wecom.stateCookie(state),
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer'
+    });
+    return res.end();
+  }
+  if (pathname === '/api/auth/wecom/callback' && req.method === 'GET') {
+    const html = function (title, msg) {
+      return '<!doctype html><meta charset="utf-8"><title>' + title + '</title>' +
+        '<div style="font:15px/1.7 system-ui;padding:40px;max-width:520px;margin:auto;color:#17253a">' +
+        '<h2 style="font-weight:600">' + title + '</h2><p>' + msg + '</p></div>';
+    };
+    const saved = wecom.readCookie(req, wecom.STATE_COOKIE);
+    const state = String(url.searchParams.get('state') || '');
+    const code = String(url.searchParams.get('code') || '');
+    const fail = function (status, title, msg, clearCookie) {
+      const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' };
+      if (clearCookie !== false) headers['Set-Cookie'] = wecom.clearStateCookie();
+      res.writeHead(status, headers);
+      return res.end(html(title, msg));
+    };
+    if (!saved || !wecom.STATE_RE.test(saved) || !state || saved !== state) {
+      return fail(400, '登录状态已失效', '这次扫码请求没有通过校验，请从系统登录页重新点「企业微信扫码登录」。');
+    }
+    if (!wecom.CODE_RE.test(code)) {
+      return fail(400, '登录码无效', '扫码结果无效或已过期，请重新发起扫码。');
+    }
+    const secret = wecom.loadSecret(DATA);
+    let info;
+    try { info = await wecom.exchange(code, secret); }
+    catch (e) { return fail(502, '兑换身份失败', String(e.message || e) + '，请重新发起扫码或联系管理员。'); }
+
+    let id = wecom.matchAccount(IDX, info);
+    let bound = false;
+    if (!id) {
+      // 通讯录可见范围可能没覆盖门店，用姓名兜底；只在姓名唯一时自动绑定
+      const byName = wecom.matchByName(IDX, info);
+      if (Array.isArray(byName)) {
+        return fail(403, '姓名重复', '企微成员「' + String(info.user.name).replace(/</g, '&lt;') + '」在账号库里对应多个同名账号，无法自动识别，请联系管理员。');
+      }
+      if (byName) {
+        const ok = identity.bindWecomUserid(DATA, byName, info.user.userid, info.user.department);
+        if (ok) { id = byName; bound = true; }
+      }
+    }
+    if (!id) {
+      const who = String((info.user && info.user.name) || info.user.userid);
+      return fail(403, '账号未开通', '企微成员「' + who.replace(/</g, '&lt;') + '」还没有对应的试点账号，请联系管理员开通后再扫码。');
+    }
+    const u = IDX.accounts[id];
+    if (u && u.active === false) {
+      return fail(403, '账号已停用', '这个账号当前处于「' + String(u.status || '停用') + '」状态，请联系管理员。');
+    }
+    const raw = IDX.TOKEN_BY_ID.get(id);
+    const profile = IDX.BY_ID.get(id);
+    if (!raw || !profile) {
+      return fail(403, '暂无有效权限', '该账号当前没有有效授权，请联系管理员。');
+    }
+    // 复用一次性链接机制：前端 ready() 读取 ?token= 并写入 localStorage
+    const next = new URL('/', 'http://localhost');
+    next.searchParams.set('token', raw);
+    next.hash = '#/home';
+    res.writeHead(302, {
+      'Location': next.pathname + next.search + next.hash,
+      'Set-Cookie': wecom.clearStateCookie(),
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer'
+    });
+    return res.end();
+  }
   if (pathname === '/api/login' && req.method === 'POST') {
     let body;
     try { body = await readBody(req, 64 * 1024); }

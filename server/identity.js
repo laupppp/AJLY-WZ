@@ -228,8 +228,22 @@ function writeAccountSheet(DATA, index) {
   fs.writeFileSync(path.join(DATA, 'accounts.txt'), lines.join('\n'), { mode: 0o600 });
 }
 
+/* 首次企微扫码：把真实 userid 绑定到账号（只改 userid 相关字段） */
+function bindWecomUserid(DATA, id, userid, department) {
+  const p = path.join(DATA, 'accounts.json');
+  const accounts = JSON.parse(fs.readFileSync(p, 'utf8'));
+  const a = accounts[id];
+  if (!a || !userid) return false;
+  a.wecom_userid = String(userid);
+  a.userid_verified = true;
+  if (department) a.wecom_department = department;
+  fs.writeFileSync(p, JSON.stringify(accounts, null, 2), { mode: 0o600 });
+  return true;
+}
+
 module.exports = {
   buildIndex: buildIndex,
   writeAccountSheet: writeAccountSheet,
-  activeGrant: activeGrant
+  activeGrant: activeGrant,
+  bindWecomUserid: bindWecomUserid
 };

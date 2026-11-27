@@ -4989,6 +4989,9 @@ module.exports = {
         '<button id="remote-login-btn" style="width:100%;padding:11px;border:0;border-radius:8px;background:#164e87;color:#fff;font-size:15px;cursor:pointer">进入系统</button>' +
         '<div style="text-align:center;margin-top:12px"><a id="remote-mode-btn" href="javascript:;" style="color:#164e87;font-size:13px">' +
           (mode === 'password' ? '改用访问令牌登录' : '改用账号密码登录') + '</a></div>' +
+        '<div style="display:flex;align-items:center;gap:10px;margin:18px 0 12px;color:#a9b6c6;font-size:12px">' +
+          '<span style="flex:1;height:1px;background:#dce4ee"></span>或者<span style="flex:1;height:1px;background:#dce4ee"></span></div>' +
+        '<a href="' + API + '/login/wecom" style="display:block;width:100%;box-sizing:border-box;padding:11px;border:1px solid #164e87;border-radius:8px;background:#fff;color:#164e87;font-size:15px;text-align:center;text-decoration:none;cursor:pointer">企业微信扫码登录</a>' +
         '<div style="color:#92a1b3;font-size:12px;margin-top:14px">身份由服务端判定，进入后不能自行切换角色。</div>' +
         '</div>';
 
